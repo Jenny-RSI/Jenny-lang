@@ -1,0 +1,29 @@
+# Jenny Build & Cache Artifacts
+.jenny-cache/
+.spun/
+target/
+build/
+dist/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.wasm
+
+# Python / Evaluation Lab
+__pycache__/
+.venv/
+*.pyc
+
+# Node / TypeScript
+node_modules/
+
+# IDE & OS
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

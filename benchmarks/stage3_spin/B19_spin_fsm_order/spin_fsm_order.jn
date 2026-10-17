@@ -1,0 +1,19 @@
+module spin_fsm_order
+
+@spin fsm::state_machine(OrderMachine) {
+    0 --[0]--> 1 guard (self.amount_cents > 0)
+    1 --[1]--> 2 guard (self.amount_cents > 0)
+    2 --[2]--> 3
+    3 --[3]--> 4
+    0 --[4]--> 5
+    1 --[4]--> 5
+}
+
+pub fn run_order_lifecycle(amount_cents: i64) -> i64 ! FsmError {
+    var m = OrderMachine.new(amount_cents)
+    m.step(0)?
+    m.step(1)?
+    m.step(2)?
+    val final_st = m.step(3)?
+    return final_st * 100 + m.transitions
+}

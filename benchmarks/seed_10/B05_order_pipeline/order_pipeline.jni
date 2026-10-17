@@ -1,0 +1,71 @@
+# B05: E-Commerce Order Settlement Pipeline & Three-Tier Error Truncation (`OrderPipeline`)
+
+This module demonstrates Jenny v2.0's **Three-Tier Error Truncation** and contract-guarded order settlement pipeline:
+1. **Tier 1 Infrastructure (Exact Closed Error)**: `query_stock` returns `i32 ! DbError` (raising `DbError.ConnectionTimeout` when `sku_id == 999`, and returning available stock `10` for all other valid `sku_id` values).
+2. **Tier 2 Domain Service (Hybrid Error Truncation)**: `settle_order` calls `val available = query_stock(sku_id)?`, raises `OrderBizError.OutOfStock` if `quantity > available`, computes `gross_cents = quantity.as<i64>() * unit_cents`, raises `OrderBizError.CouponExceedsGross` if `discount_cents > gross_cents`, and otherwise returns `OrderReceipt`.
+3. **Tier 3 Top-Level Entrypoint (Full Truncation Shorthand)**: `checkout_endpoint` calls `val receipt = settle_order(order_id, sku_id, quantity, 2000, 200)?` with default `unit_cents = 2000` and `discount_cents = 200`, returning `receipt.final_cents`.
+
+```jenny
+module order_pipeline
+
+pub enum DbError {
+    ConnectionTimeout,
+    RecordNotFound,
+}
+
+pub enum OrderBizError {
+    InvalidQuantity,
+    OutOfStock,
+    CouponExceedsGross,
+}
+
+pub struct OrderReceipt {
+    pub order_id: i64,
+    pub gross_cents: i64,
+    pub discount_cents: i64,
+    pub final_cents: i64,
+
+    invariant {
+        self.gross_cents >= 0
+        self.discount_cents >= 0
+        self.final_cents >= 0
+        self.final_cents == self.gross_cents - self.discount_cents
+    }
+}
+
+pub fn query_stock(sku_id: i32) -> i32 ! DbError
+    requires sku_id > 0 else DbError.RecordNotFound
+    ensures result >= 0
+
+pub fn settle_order(
+    order_id: i64,
+    sku_id: i32,
+    quantity: i32,
+    unit_cents: i64,
+    discount_cents: i64
+) -> OrderReceipt ! (OrderBizError | AnyError)
+    requires quantity > 0 else OrderBizError.InvalidQuantity
+    requires unit_cents >= 0 else OrderBizError.InvalidQuantity
+    requires discount_cents >= 0 else OrderBizError.CouponExceedsGross
+    ensures result.final_cents >= 0
+    ensures result.final_cents <= result.gross_cents
+
+pub fn checkout_endpoint(order_id: i64, sku_id: i32, quantity: i32) -> i64!
+    ensures result >= 0
+
+@example("EX-B05-01: 3-tier error truncation and normal order settlement") {
+    val receipt = settle_order(1001, 42, 3, 2000, 500)!
+    assert(receipt.gross_cents == 6000)
+    assert(receipt.discount_cents == 500)
+    assert(receipt.final_cents == 5500)
+
+    val paid = checkout_endpoint(1002, 42, 2)!
+    assert(paid == 3800)
+
+    val stock_err = settle_order(1003, 42, 99, 2000, 0)
+    assert(stock_err is OrderBizError.OutOfStock)
+
+    val db_err = settle_order(1004, 999, 1, 2000, 0)
+    assert(db_err is DbError.ConnectionTimeout)
+}
+```

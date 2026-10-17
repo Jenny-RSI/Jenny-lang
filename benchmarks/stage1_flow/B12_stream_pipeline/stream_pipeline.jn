@@ -1,0 +1,25 @@
+module stream_pipeline
+
+fn scale_raw(val: i64, factor: i64) -> i64 {
+    return val * factor
+}
+
+fn apply_bias(val: i64, bias: i64) -> i64 {
+    return val + bias
+}
+
+fn clamp_score(val: i64, low: i64, high: i64) -> i64 {
+    val c_low = if val < low { low } else { val }
+    val c_high = if c_low > high { high } else { c_low }
+    return c_high
+}
+
+pub fn execute_pipeline(
+    raw_val: i64,
+    scale_factor: i64,
+    custom_bias: i64?
+) -> i64 ! PipelineError {
+    val bias = custom_bias ?? 50
+    val final_score = raw_val |> scale_raw(scale_factor) |> apply_bias(bias) |> clamp_score(0, 1000)
+    return final_score
+}

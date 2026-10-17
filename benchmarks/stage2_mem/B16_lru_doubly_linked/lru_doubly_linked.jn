@@ -1,0 +1,26 @@
+module lru_doubly_linked
+
+pub fn alloc_lru_node(key: i64, val_data: i64) -> ^LruNode {
+    return ^LruNode {
+        key: key,
+        val_data: val_data,
+        prev: null,
+        next: null,
+    }
+}
+
+pub fn link_two_nodes(mut head: ^LruNode, mut tail: ^LruNode) -> void {
+    head.next = tail
+    tail.prev = head
+}
+
+pub fn sum_linked_pair(head: ^LruNode, tail: ^LruNode) -> i64 {
+    return head.next.val_data + tail.prev.val_data
+}
+
+pub fn run_lru_cycle_demo(k1: i64, v1: i64, k2: i64, v2: i64) -> i64 {
+    var n1 = alloc_lru_node(k1, v1)
+    var n2 = alloc_lru_node(k2, v2)
+    link_two_nodes(mut n1, mut n2)
+    return sum_linked_pair(n1, n2)
+}

@@ -1,0 +1,43 @@
+# B12: Nullable Config Coalescing & Functional Dataflow Pipeline (`StreamPipeline`)
+
+This module demonstrates Stage 1 (`Jenny-Flow v0.2`) linear dataflow ergonomics:
+1. **Nullable Type `T?` & Null-Coalescing Operator `??`**: `val bias = custom_bias ?? 50` replaces verbose `match Option` or `.unwrap_or(...)` boilerplate in a single expression.
+2. **Pipeline Operator `|>`**: Flattens deeply nested calls `clamp_score(apply_bias(scale_raw(val, factor), bias), 0, 1000)` into a left-to-right dataflow pipeline: `raw_val |> scale_raw(scale_factor) |> apply_bias(bias) |> clamp_score(0, 1000)`.
+3. **Call-Site Named Arguments (`key: val`)**: Provides self-documenting call sites with zero runtime overhead while keeping private helper stages (`scale_raw`, `apply_bias`, `clamp_score`) encapsulated inside `.jn` out of the `.jni` blueprint.
+
+```jenny
+module stream_pipeline
+
+pub enum PipelineError {
+    NegativeScale,
+    RawOutOfRange,
+}
+
+pub fn execute_pipeline(
+    raw_val: i64,
+    scale_factor: i64,
+    custom_bias: i64?
+) -> i64 ! PipelineError
+    requires raw_val >= -10000 && raw_val <= 10000 else PipelineError.RawOutOfRange
+    requires scale_factor >= 0 else PipelineError.NegativeScale
+    ensures result >= 0 && result <= 1000
+
+@example("EX-B12-01: pipe operator |>, optional T?, null-coalescing ??, and named args") {
+    val res_default = execute_pipeline(raw_val: 40, scale_factor: 10, custom_bias: null)!
+    assert(res_default == 450)
+
+    val res_custom = execute_pipeline(40, 10, some(120))!
+    assert(res_custom == 520)
+
+    val res_clamped = execute_pipeline(200, 10, null)!
+    assert(res_clamped == 1000)
+}
+
+@example("EX-B12-02: reject negative scale factor and out-of-range raw input") {
+    val err_scale = execute_pipeline(10, -2, null)
+    assert(err_scale is PipelineError.NegativeScale)
+
+    val err_range = execute_pipeline(99999, 1, null)
+    assert(err_range is PipelineError.RawOutOfRange)
+}
+```

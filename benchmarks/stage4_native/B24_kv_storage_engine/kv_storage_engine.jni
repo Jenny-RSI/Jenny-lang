@@ -1,0 +1,87 @@
+# B24: Full-Stack KV Storage Engine with WAL Binary Codec & Trait Delegation (`kv_storage_engine`)
+
+This Stage 4 (`Jenny-Native v1.0`) capstone benchmark combines `@apply(codec::binary)`, `pub trait KvBackend`, and `delegate KvBackend to self.inner`:
+1. **`MemKvBackend.write_wal(mut self, seq_id: i64, payload_len: i64)`**: Constructs `val pkt = WalPacket.new(seq_id, payload_len)`, validates `val _digest = pkt.encode_digest()?`, increments `self.entry_count = self.entry_count + 1`, increments `self.bytes_written = self.bytes_written + pkt.wire_size()`, and returns `return self.bytes_written`.
+2. **`MemKvBackend.total_bytes(self)`**: Returns `return self.bytes_written`.
+3. **`replicate_and_verify_wal(mut engine: AuditedKvEngine, seq_id: i64, payload_len: i64)`**: Increments `engine.audit_calls = engine.audit_calls + 1`, calls `val total = engine.write_wal(seq_id, payload_len)?` (which returns cumulative `bytes_written`), and returns `return total`.
+
+```jenny
+module kv_storage_engine
+
+pub enum CodecError {
+    BufferUnderflow,
+    InvalidMagic,
+    ChecksumMismatch,
+    InvalidKey,
+}
+
+@apply(codec::binary)
+pub struct WalPacket {
+    pub magic: i64 = 43981,
+    pub version: i64 = 1,
+    pub seq_id: i64 = 0,
+    pub payload_len: i64 = 0,
+    pub checksum: i64 = 0,
+    invariant self.version >= 1
+    invariant self.payload_len >= 0 && self.payload_len <= 4096
+}
+
+pub trait KvBackend {
+    pub fn write_wal(mut self, seq_id: i64, payload_len: i64) -> i64 ! CodecError
+    pub fn total_bytes(self) -> i64
+}
+
+pub struct MemKvBackend {
+    pub entry_count: i64 = 0,
+    pub bytes_written: i64 = 0,
+    invariant self.entry_count >= 0
+    invariant self.bytes_written >= 0
+}
+
+impl MemKvBackend {
+    pub fn new() -> MemKvBackend
+        ensures result.entry_count == 0 && result.bytes_written == 0
+    pub fn write_wal(mut self, seq_id: i64, payload_len: i64) -> i64 ! CodecError
+        requires payload_len >= 0 && payload_len <= 4096 else CodecError.BufferUnderflow
+        ensures self.entry_count == old(self.entry_count) + 1
+    pub fn total_bytes(self) -> i64
+}
+
+pub struct AuditedKvEngine {
+    pub inner: MemKvBackend,
+    pub audit_calls: i64 = 0,
+    delegate KvBackend to self.inner
+    invariant self.audit_calls >= 0
+}
+
+impl AuditedKvEngine {
+    pub fn new() -> AuditedKvEngine
+        ensures result.audit_calls == 0
+}
+
+pub fn replicate_and_verify_wal(mut engine: AuditedKvEngine, seq_id: i64, payload_len: i64) -> i64 ! CodecError
+    requires seq_id > 0 else CodecError.InvalidKey
+    requires payload_len >= 0 && payload_len <= 4096 else CodecError.BufferUnderflow
+    ensures result >= 40
+
+@example("EX-B24-01: full-stack WAL binary codec, trait delegation, and native execution") {
+    var engine = AuditedKvEngine.new()
+    val w1 = replicate_and_verify_wal(mut engine, 1, 128)!
+    assert(w1 == 40)
+    assert(engine.audit_calls == 1)
+
+    val w2 = replicate_and_verify_wal(mut engine, 2, 256)!
+    assert(w2 == 80)
+    assert(engine.audit_calls == 2)
+    assert(engine.total_bytes() == 80)
+}
+
+@example("EX-B24-02: reject invalid key and oversized payload in WAL replication") {
+    var engine = AuditedKvEngine.new()
+    val bad_key = replicate_and_verify_wal(mut engine, 0, 128)
+    assert(bad_key is Err(CodecError.InvalidKey))
+
+    val bad_len = replicate_and_verify_wal(mut engine, 1, 8192)
+    assert(bad_len is Err(CodecError.BufferUnderflow))
+}
+```

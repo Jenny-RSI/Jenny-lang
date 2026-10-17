@@ -1,0 +1,16 @@
+module spin_binary_codec
+
+pub fn verify_packet_roundtrip(seq_id: i64, payload_len: i64) -> i64 ! CodecError {
+    val pkt = TelemetryPacket.new(seq_id, payload_len)
+    val decoded = TelemetryPacket.decode_header(
+        pkt.magic,
+        pkt.version,
+        pkt.seq_id,
+        pkt.payload_len,
+        pkt.checksum
+    )?
+    val digest = decoded.encode_digest()?
+    @spin if true {
+        return digest + decoded.wire_size()
+    }
+}

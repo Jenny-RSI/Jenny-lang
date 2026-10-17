@@ -1,0 +1,29 @@
+module http_view
+
+pub fn build_request_view(method: str, path: str, host: str, content_len: i64) -> HttpRequestView ! HttpViewError {
+    return HttpRequestView {
+        method: method,
+        path: path,
+        host: host,
+        content_len: content_len,
+    }
+}
+
+impl HttpRequestView {
+    pub fn is_post_api(self) -> bool {
+        return self.method == "POST"
+    }
+}
+
+pub fn route_zero_copy(req: HttpRequestView) -> i32 ! HttpViewError {
+    guard req.host != "" else {
+        raise HttpViewError.EmptyHost
+    }
+    if req.path == "/api/v1/upload" && req.is_post_api() {
+        return 201
+    } else if req.path == "/health" {
+        return 200
+    } else {
+        return 404
+    }
+}

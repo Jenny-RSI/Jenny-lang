@@ -1,0 +1,50 @@
+# B19: Declarative `@spin fsm::state_machine` Order Lifecycle (`spin_fsm_order`)
+
+This Stage 3 (`Jenny-Spin v0.4`) benchmark demonstrates **10x+ Token compression** via Jenny's declarative `@spin fsm::state_machine(OrderMachine)` block:
+1. **`@spin fsm::state_machine(OrderMachine)`**: Automatically synthesizes `OrderMachine.new`, `can_fire`, `step`, and `is_terminal` into `.spun/spin_fsm_order.spun.jn` for states `0..=5` and events `0..=4`.
+2. **`run_order_lifecycle(amount_cents: i64)`**: Allocates `var m = OrderMachine.new(amount_cents)`, fires events `0`, `1`, `2`, `3` in sequence (`m.step(0)?`, `m.step(1)?`, `m.step(2)?`, `val final_st = m.step(3)?`), and returns `final_st * 100 + m.transitions`.
+
+```jenny
+module spin_fsm_order
+
+pub enum FsmError {
+    InvalidTransition,
+    GuardRejected,
+}
+
+pub struct OrderMachine {
+    pub state: i64 = 0,
+    pub amount_cents: i64 = 0,
+    pub transitions: i64 = 0,
+    invariant self.state >= 0 && self.state <= 5
+    invariant self.transitions >= 0
+}
+
+pub fn run_order_lifecycle(amount_cents: i64) -> i64 ! FsmError
+    requires amount_cents > 0 else FsmError.GuardRejected
+    ensures result == 404
+
+@example("EX-B19-01: declarative @spin fsm::state_machine lifecycle and terminal states") {
+    val code = run_order_lifecycle(2500)?
+    assert(code == 404)
+
+    var m = OrderMachine.new(1200)
+    assert(m.can_fire(0))
+    assert(!m.can_fire(2))
+    val st1 = m.step(0)?
+    assert(st1 == 1)
+    val st5 = m.step(4)?
+    assert(st5 == 5)
+    assert(m.is_terminal())
+}
+
+@example("EX-B19-02: reject invalid state transitions and zero-amount guard") {
+    var m = OrderMachine.new(1200)
+    val bad_ev = m.step(3)
+    assert(bad_ev is FsmError.InvalidTransition)
+
+    var zero_m = OrderMachine.new(0)
+    val guard_err = zero_m.step(0)
+    assert(guard_err is FsmError.GuardRejected)
+}
+```

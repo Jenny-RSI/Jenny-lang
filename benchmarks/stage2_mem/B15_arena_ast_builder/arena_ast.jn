@@ -1,0 +1,43 @@
+module arena_ast
+
+pub fn eval_ast_node(node: *AstNode) -> i64 {
+    if node.op_code == 0 {
+        return node.lit_val
+    } else if node.op_code == 1 {
+        return node.lhs_val + node.rhs_val
+    } else {
+        return node.lhs_val * node.rhs_val
+    }
+}
+
+pub fn alloc_lit_node(mut arena: Arena, v: i64) -> *AstNode {
+    return *in(arena) AstNode {
+        op_code: 0,
+        lit_val: v,
+        lhs_val: 0,
+        rhs_val: 0,
+    }
+}
+
+pub fn alloc_bin_node(mut arena: Arena, op_code: i32, lhs: *AstNode, rhs: *AstNode) -> *AstNode {
+    val l = eval_ast_node(lhs)
+    val r = eval_ast_node(rhs)
+    return *in(arena) AstNode {
+        op_code: op_code,
+        lit_val: 0,
+        lhs_val: l,
+        rhs_val: r,
+    }
+}
+
+pub fn eval_formula_in_arena(a: i64, b: i64, c: i64) -> i64 {
+    var arena = Arena.new(4096)
+    val na = alloc_lit_node(mut arena, a)
+    val nb = alloc_lit_node(mut arena, b)
+    val nc = alloc_lit_node(mut arena, c)
+    val sum_node = alloc_bin_node(mut arena, 1, na, nb)
+    val mul_node = alloc_bin_node(mut arena, 2, sum_node, nc)
+    val res = eval_ast_node(mul_node)
+    arena.drop()
+    return res
+}

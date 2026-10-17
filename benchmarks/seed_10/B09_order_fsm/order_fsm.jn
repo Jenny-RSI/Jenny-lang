@@ -1,0 +1,33 @@
+module order_fsm
+
+impl OrderStateMachine {
+    pub fn new(order_id: i64) -> OrderStateMachine {
+        return OrderStateMachine {
+            order_id: order_id,
+            state: 0,
+            version: 1,
+            paid_cents: 0,
+        }
+    }
+
+    pub fn pay(mut self, amount_cents: i64) -> void ! FsmError {
+        self.state = 1
+        self.paid_cents = amount_cents
+        self.version += 1
+    }
+
+    pub fn ship(mut self) -> void ! FsmError {
+        self.state = 2
+        self.version += 1
+    }
+
+    pub fn deliver(mut self) -> void ! FsmError {
+        self.state = 3
+        self.version += 1
+    }
+
+    pub fn cancel(mut self) -> void ! FsmError {
+        self.state = 4
+        self.version += 1
+    }
+}

@@ -1,0 +1,26 @@
+module lru_ttl_cache
+
+impl CacheSlot {
+    pub fn new(key: i64, value: i64, now_ms: i64, ttl_ms: i64) -> CacheSlot ! CacheError {
+        val exp = now_ms + ttl_ms
+        return CacheSlot {
+            key: key,
+            value: value,
+            expires_at_ms: exp,
+            last_access_ms: now_ms,
+            hits: 0,
+            misses: 0,
+        }
+    }
+
+    pub fn get(mut self, query_key: i64, now_ms: i64) -> i64 ! CacheError {
+        self.last_access_ms = now_ms
+        self.hits += 1
+        return self.value
+    }
+
+    pub fn refresh(mut self, now_ms: i64, extra_ttl_ms: i64) -> void ! CacheError {
+        self.last_access_ms = now_ms
+        self.expires_at_ms = now_ms + extra_ttl_ms
+    }
+}

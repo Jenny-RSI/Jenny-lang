@@ -1,0 +1,26 @@
+module expr_evaluator
+
+pub fn eval_binary(op_code: i32, lhs: i64, rhs: i64) -> i64 ! EvalError {
+    val res1 = if op_code == 1 { lhs + rhs } else { lhs - rhs }
+    val res2 = if op_code == 3 { lhs * rhs } else { res1 }
+    val final_val = if op_code == 4 { lhs / rhs } else { res2 }
+    return final_val
+}
+
+pub fn eval_and_clamp(
+    op_code: i32,
+    lhs: i64,
+    rhs: i64,
+    min_bound: i64,
+    max_bound: i64
+) -> EvalResult ! EvalError {
+    val raw = eval_binary(op_code, lhs, rhs)?
+    val low_clamped = if raw < min_bound { min_bound } else { raw }
+    val clamped = if low_clamped > max_bound { max_bound } else { low_clamped }
+    return EvalResult {
+        raw_value: raw,
+        clamped_value: clamped,
+        min_bound: min_bound,
+        max_bound: max_bound,
+    }
+}

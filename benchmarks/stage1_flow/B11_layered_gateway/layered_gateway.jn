@@ -1,0 +1,46 @@
+module layered_gateway
+
+pub fn cache_get_price(sku_id: i32) -> i64 ! RedisError {
+    guard sku_id == 10 else {
+        raise RedisError.CacheMiss
+    }
+    return 1000
+}
+
+pub fn db_get_price(sku_id: i32) -> i64 ! DbError {
+    guard sku_id != 500 else {
+        raise DbError.Deadlock
+    }
+    return 2000
+}
+
+pub fn repo_resolve_price(sku_id: i32) -> i64! {
+    val price = cache_get_price(sku_id) catch err { db_get_price(sku_id)? }
+    return price
+}
+
+pub fn service_settle_checkout(
+    user_id: i64,
+    sku_id: i32,
+    qty: i32,
+    tax_bps: i64
+) -> GatewayReceipt ! (GatewayBizError | AnyError) {
+    val unit_price = repo_resolve_price(sku_id)?
+    val sub = unit_price * qty.as<i64>()
+    guard sub <= 100000 else {
+        raise GatewayBizError.CreditLimitExceeded
+    }
+    val tax = (sub * tax_bps) / 10000
+    val total = sub + tax
+    return GatewayReceipt {
+        user_id: user_id,
+        subtotal: sub,
+        tax_cents: tax,
+        total_charged: total,
+    }
+}
+
+pub fn controller_handle_checkout(user_id: i64, sku_id: i32, qty: i32) -> i64! {
+    val receipt = service_settle_checkout(user_id: user_id, sku_id: sku_id, qty: qty, tax_bps: 800)?
+    return receipt.total_charged
+}

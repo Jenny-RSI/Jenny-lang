@@ -1,0 +1,73 @@
+# B04: Cache Slot Controller with TTL Expiration & LRU Hit Statistics (`LruTtlCache`)
+
+This module implements an in-memory cache slot controller (`CacheSlot`) supporting Time-To-Live (`TTL`) expiration checks, access timestamp advancement, and hit/miss statistics.
+It highlights `mut self` in-place state mutation, monotonic counter postconditions (`old(self.hits) + 1`), and expired key interception.
+
+```jenny
+module lru_ttl_cache
+
+pub enum CacheError {
+    KeyMismatch,
+    EntryExpired,
+    InvalidTtl,
+}
+
+pub struct CacheSlot {
+    pub key: i64,
+    pub value: i64,
+    pub expires_at_ms: i64,
+    pub last_access_ms: i64,
+    pub hits: usize = 0,
+    pub misses: usize = 0,
+
+    invariant {
+        self.expires_at_ms >= self.last_access_ms
+    }
+}
+
+impl CacheSlot {
+    pub fn new(key: i64, value: i64, now_ms: i64, ttl_ms: i64) -> CacheSlot ! CacheError
+        requires now_ms >= 0 else CacheError.InvalidTtl
+        requires ttl_ms > 0 else CacheError.InvalidTtl
+        ensures result.hits == 0
+        ensures result.expires_at_ms == now_ms + ttl_ms
+
+    pub fn get(mut self, query_key: i64, now_ms: i64) -> i64 ! CacheError
+        requires query_key == self.key else CacheError.KeyMismatch
+        requires now_ms <= self.expires_at_ms else CacheError.EntryExpired
+        ensures self.hits == old(self.hits) + 1
+        ensures self.last_access_ms == now_ms
+
+    pub fn refresh(mut self, now_ms: i64, extra_ttl_ms: i64) -> void ! CacheError
+        requires extra_ttl_ms > 0 else CacheError.InvalidTtl
+        requires now_ms >= self.last_access_ms else CacheError.InvalidTtl
+        ensures self.expires_at_ms == now_ms + extra_ttl_ms
+}
+
+@example("EX-B04-01: cache hit, LRU timestamp advance, and TTL refresh") {
+    var slot = CacheSlot.new(101, 9999, 1000, 500)!
+    assert(slot.hits == 0)
+    assert(slot.expires_at_ms == 1500)
+
+    val v1 = slot.get(101, 1200)!
+    assert(v1 == 9999)
+    assert(slot.hits == 1)
+    assert(slot.last_access_ms == 1200)
+
+    slot.refresh(1400, 600)!
+    assert(slot.expires_at_ms == 2000)
+
+    val v2 = slot.get(101, 1800)!
+    assert(v2 == 9999)
+    assert(slot.hits == 2)
+}
+
+@example("EX-B04-02: expired entry and key mismatch errors") {
+    var slot = CacheSlot.new(101, 9999, 1000, 500)!
+    val miss_err = slot.get(202, 1100)
+    assert(miss_err is CacheError.KeyMismatch)
+
+    val exp_err = slot.get(101, 1600)
+    assert(exp_err is CacheError.EntryExpired)
+}
+```

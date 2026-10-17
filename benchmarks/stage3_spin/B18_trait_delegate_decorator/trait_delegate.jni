@@ -1,0 +1,91 @@
+# B18: Zero-Boilerplate Trait Delegation & 16-Byte `dyn Trait` (`trait_delegate`)
+
+This Stage 3 (`Jenny-Spin v0.4`) benchmark validates **`pub trait KvEngine`**, **`delegate KvEngine to self.inner`**, and **`dyn KvEngine`**:
+1. **`MemKvStore`**: Base 4-slot store (`s0, s1, s2, s3, writes`). `read_slot(self, slot)` returns `self.s0` (`slot == 0`), `self.s1` (`slot == 1`), `self.s2` (`slot == 2`), or `self.s3` (otherwise). `write_slot(mut self, slot, val_data)` increments `self.writes += 1` and assigns `val_data` to `self.s0` (`slot == 0`), `self.s1` (`slot == 1`), `self.s2` (`slot == 2`), or `self.s3`. `capacity(self)` returns `4`. `checksum(self)` returns `self.s0 + self.s1 + self.s2 + self.s3`. `reset_all(mut self)` sets `self.s0 = 0`, `self.s1 = 0`, `self.s2 = 0`, `self.s3 = 0`.
+2. **`AuditedKvDecorator`**: Wraps `inner: MemKvStore` and uses `delegate KvEngine to self.inner` to forward `capacity`, `checksum`, and `reset_all` automatically. `read_slot(mut self, slot)` increments `self.audit_reads += 1` and returns `self.inner.read_slot(slot)`. `write_slot(mut self, slot, val_data)` increments `self.audit_writes += 1` and calls `self.inner.write_slot(slot, val_data)`.
+3. **`inspect_engine_digest(engine: dyn KvEngine)`**: Accepts any `KvEngine` via 16-byte stack-borrowed fat pointer and returns `engine.capacity() * 100 + engine.checksum()`.
+
+```jenny
+module trait_delegate
+
+pub trait KvEngine {
+    pub fn read_slot(self, slot: i64) -> i64
+    pub fn write_slot(mut self, slot: i64, val_data: i64) -> void
+    pub fn capacity(self) -> i64
+    pub fn checksum(self) -> i64
+    pub fn reset_all(mut self) -> void
+}
+
+pub struct MemKvStore {
+    pub s0: i64 = 0,
+    pub s1: i64 = 0,
+    pub s2: i64 = 0,
+    pub s3: i64 = 0,
+    pub writes: i64 = 0,
+    invariant self.writes >= 0
+}
+
+impl MemKvStore {
+    pub fn new(s0: i64, s1: i64, s2: i64, s3: i64) -> MemKvStore
+        ensures result.writes == 0
+
+    pub fn read_slot(self, slot: i64) -> i64
+    pub fn write_slot(mut self, slot: i64, val_data: i64) -> void
+        ensures self.writes == old(self.writes) + 1
+    pub fn capacity(self) -> i64
+        ensures result == 4
+    pub fn checksum(self) -> i64
+    pub fn reset_all(mut self) -> void
+        ensures self.s0 == 0 && self.s1 == 0
+}
+
+pub struct AuditedKvDecorator {
+    pub inner: MemKvStore,
+    pub audit_reads: i64 = 0,
+    pub audit_writes: i64 = 0,
+    delegate KvEngine to self.inner
+    invariant self.audit_reads >= 0
+    invariant self.audit_writes >= 0
+}
+
+impl AuditedKvDecorator {
+    pub fn new(s0: i64, s1: i64, s2: i64, s3: i64) -> AuditedKvDecorator
+        ensures result.audit_reads == 0 && result.audit_writes == 0
+
+    pub fn read_slot(mut self, slot: i64) -> i64
+        ensures self.audit_reads == old(self.audit_reads) + 1
+
+    pub fn write_slot(mut self, slot: i64, val_data: i64) -> void
+        ensures self.audit_writes == old(self.audit_writes) + 1
+}
+
+pub fn inspect_engine_digest(engine: dyn KvEngine) -> i64
+    ensures result >= 0
+
+@example("EX-B18-01: delegate KvEngine to self.inner forwards capacity, checksum, and reset_all") {
+    var dec = AuditedKvDecorator.new(10, 20, 30, 40)
+    assert(dec.capacity() == 4)
+    assert(dec.checksum() == 100)
+
+    val v1 = dec.read_slot(1)
+    assert(v1 == 20)
+    assert(dec.audit_reads == 1)
+
+    dec.write_slot(2, 90)
+    assert(dec.audit_writes == 1)
+    assert(dec.checksum() == 160)
+
+    dec.reset_all()
+    assert(dec.checksum() == 0)
+}
+
+@example("EX-B18-02: zero-boxing 16-byte dyn KvEngine polymorphic dispatch") {
+    val raw_store = MemKvStore.new(5, 15, 25, 35)
+    val dec_store = AuditedKvDecorator.new(10, 20, 30, 40)
+
+    val d1 = inspect_engine_digest(raw_store)
+    val d2 = inspect_engine_digest(dec_store)
+    assert(d1 == 480)
+    assert(d2 == 500)
+}
+```

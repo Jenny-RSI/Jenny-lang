@@ -1,0 +1,65 @@
+# B03: Arithmetic Expression Evaluator & Clamping Limiter (`ExprEvaluator`)
+
+This module implements an arithmetic expression evaluator and clamping limiter supporting addition (`op_code == 1`), subtraction (`op_code == 2`), multiplication (`op_code == 3`), and integer division (`op_code == 4`).
+First-class contracts intercept division by zero (`DivisionByZero`) and invalid opcodes (`InvalidOpCode`), while guaranteeing that clamped outputs fall strictly within the closed interval `[min_bound, max_bound]`.
+
+```jenny
+module expr_evaluator
+
+pub enum EvalError {
+    DivisionByZero,
+    InvalidOpCode,
+    InvalidBounds,
+}
+
+pub struct EvalResult {
+    pub raw_value: i64,
+    pub clamped_value: i64,
+    pub min_bound: i64,
+    pub max_bound: i64,
+
+    invariant {
+        self.min_bound <= self.max_bound
+        self.clamped_value >= self.min_bound
+        self.clamped_value <= self.max_bound
+    }
+}
+
+pub fn eval_binary(op_code: i32, lhs: i64, rhs: i64) -> i64 ! EvalError
+    requires op_code >= 1 && op_code <= 4 else EvalError.InvalidOpCode
+    requires op_code != 4 || rhs != 0 else EvalError.DivisionByZero
+
+pub fn eval_and_clamp(
+    op_code: i32,
+    lhs: i64,
+    rhs: i64,
+    min_bound: i64,
+    max_bound: i64
+) -> EvalResult ! EvalError
+    requires min_bound <= max_bound else EvalError.InvalidBounds
+    ensures result.clamped_value >= min_bound
+    ensures result.clamped_value <= max_bound
+
+@example("EX-B03-01: arithmetic evaluation and clamping invariants") {
+    val sum = eval_binary(1, 40, 2)!
+    assert(sum == 42)
+
+    val quot = eval_binary(4, 100, 5)!
+    assert(quot == 20)
+
+    val clamped = eval_and_clamp(3, 50, 10, 0, 255)!
+    assert(clamped.raw_value == 500)
+    assert(clamped.clamped_value == 255)
+}
+
+@example("EX-B03-02: division by zero and invalid opcode errors") {
+    val div_zero = eval_binary(4, 10, 0)
+    assert(div_zero is EvalError.DivisionByZero)
+
+    val bad_op = eval_binary(99, 1, 2)
+    assert(bad_op is EvalError.InvalidOpCode)
+
+    val bad_bounds = eval_and_clamp(1, 10, 20, 100, 50)
+    assert(bad_bounds is EvalError.InvalidBounds)
+}
+```

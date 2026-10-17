@@ -1,0 +1,54 @@
+# B14: Zero-Annotation Zero-Copy HTTP Packet Slice View (`ZeroCopyHttpView`)
+
+This module demonstrates Stage 2 (`Jenny-Mem v0.3`) **Implicit Stack-Bound Views** with **zero `<'a>` lifetime contagion**:
+1. **Automatic Stack View Recognition**: `HttpRequestView` holds three zero-copy string slices (`method: str`, `path: str`, `host: str`) plus `content_len: i64`. In Jenny v2.0, without writing `view struct` or Rust-style `HttpRequestView<'a>`, the compiler automatically classifies it as a stack-bound view and rejects heap boxing (`*HttpRequestView` or `^HttpRequestView`) at compile time with `E0203_VIEW_STRUCT_ESCAPE`.
+2. **`build_request_view`**: Takes `method: str`, `path: str`, `host: str`, and `content_len: i64`, validates `content_len >= 0` (otherwise raising `HttpViewError.NegativeContentLength`), and returns `HttpRequestView { method: method, path: path, host: host, content_len: content_len }`.
+3. **`HttpRequestView.is_post_api(self)`**: Returns `true` if `self.method == "POST"`, else `false`.
+4. **`route_zero_copy(req: HttpRequestView)`**: If `req.host == ""` then `raise HttpViewError.EmptyHost`; if `req.path == "/api/v1/upload"` and `req.is_post_api()`, returns `201`; if `req.path == "/health"`, returns `200`; otherwise returns `404`.
+
+```jenny
+module http_view
+
+pub enum HttpViewError {
+    NegativeContentLength,
+    EmptyHost,
+}
+
+pub struct HttpRequestView {
+    pub method: str,
+    pub path: str,
+    pub host: str,
+    pub content_len: i64 = 0,
+    invariant self.content_len >= 0
+}
+
+pub fn build_request_view(method: str, path: str, host: str, content_len: i64) -> HttpRequestView ! HttpViewError
+    requires content_len >= 0 else HttpViewError.NegativeContentLength
+    ensures result.content_len == content_len
+
+impl HttpRequestView {
+    pub fn is_post_api(self) -> bool
+}
+
+pub fn route_zero_copy(req: HttpRequestView) -> i32 ! HttpViewError
+    ensures result == 200 || result == 201 || result == 404
+
+@example("EX-B14-01: zero-copy request view routing without lifetime annotations") {
+    val req = build_request_view("POST", "/api/v1/upload", "edge.jenny.dev", 512)!
+    assert(req.is_post_api() == true)
+    val status = route_zero_copy(req)!
+    assert(status == 201)
+
+    val health_req = build_request_view("GET", "/health", "edge.jenny.dev", 0)!
+    assert(route_zero_copy(health_req)! == 200)
+}
+
+@example("EX-B14-02: reject empty host and negative content length") {
+    val bad_len = build_request_view("GET", "/health", "edge.jenny.dev", -5)
+    assert(bad_len is Err(HttpViewError.NegativeContentLength))
+
+    val empty_host_req = build_request_view("GET", "/health", "", 0)!
+    val route_res = route_zero_copy(empty_host_req)
+    assert(route_res is Err(HttpViewError.EmptyHost))
+}
+```

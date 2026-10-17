@@ -1,0 +1,70 @@
+# B08: Storage Engine Quota Guard & Read/Write Audit Decorator (`StorageDecorator`)
+
+This module implements a storage decorator (`TrackedStorage`) with capacity quota enforcement (`quota_bytes`) and read/write audit telemetry counters.
+Its `invariant` guarantees that `used_bytes` never exceeds `quota_bytes`, and `ensures` verifies exact updates to audit counters and used capacity after each read or write operation.
+
+```jenny
+module storage_decorator
+
+pub enum StorageError {
+    QuotaExceeded,
+    InvalidPayloadSize,
+    InvalidQuota,
+}
+
+pub struct TrackedStorage {
+    pub quota_bytes: usize,
+    pub used_bytes: usize = 0,
+    pub read_ops: usize = 0,
+    pub write_ops: usize = 0,
+
+    invariant {
+        self.quota_bytes > 0
+        self.used_bytes <= self.quota_bytes
+    }
+}
+
+impl TrackedStorage {
+    pub fn new(quota_bytes: usize) -> TrackedStorage ! StorageError
+        requires quota_bytes > 0 else StorageError.InvalidQuota
+        ensures result.used_bytes == 0
+        ensures result.write_ops == 0
+
+    pub fn write_block(mut self, payload_bytes: usize) -> usize ! StorageError
+        requires payload_bytes > 0 else StorageError.InvalidPayloadSize
+        requires self.used_bytes + payload_bytes <= self.quota_bytes else StorageError.QuotaExceeded
+        ensures self.write_ops == old(self.write_ops) + 1
+        ensures self.used_bytes == old(self.used_bytes) + payload_bytes
+
+    pub fn read_block(mut self) -> usize
+        ensures self.read_ops == old(self.read_ops) + 1
+        ensures result == self.used_bytes
+}
+
+@example("EX-B08-01: storage quota tracking and telemetry counters") {
+    var store = TrackedStorage.new(1024)!
+    val u1 = store.write_block(256)!
+    assert(u1 == 256)
+    assert(store.write_ops == 1)
+
+    val u2 = store.write_block(512)!
+    assert(u2 == 768)
+    assert(store.write_ops == 2)
+
+    val r1 = store.read_block()
+    assert(r1 == 768)
+    assert(store.read_ops == 1)
+}
+
+@example("EX-B08-02: reject quota overflow and empty writes") {
+    var store = TrackedStorage.new(500)!
+    store.write_block(400)!
+
+    val over_err = store.write_block(200)
+    assert(over_err is StorageError.QuotaExceeded)
+    assert(store.used_bytes == 400)
+
+    val zero_err = store.write_block(0)
+    assert(zero_err is StorageError.InvalidPayloadSize)
+}
+```

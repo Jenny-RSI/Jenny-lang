@@ -1,0 +1,10 @@
+module spin_crud_service
+
+pub fn execute_account_batch(init_a: i64, init_b: i64, topup: i64) -> i64 ! ServiceError {
+    var svc = AccountService.new()
+    svc.create_account(init_a)?
+    svc.create_account(init_b)?
+    svc.deposit(topup)?
+    svc.delete_account(init_a)?
+    return svc.query_summary()
+}

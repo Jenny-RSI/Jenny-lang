@@ -1,0 +1,57 @@
+# B22: Zero-Glue C FFI Interop & Explicit Raw-Pointer Boundary (`c_ffi_crc32`)
+
+This Stage 4 (`Jenny-Native v1.0`) benchmark demonstrates zero-glue C interoperability (`import c`), `@repr(C)` struct layout, and explicit `.as_raw_ptr()` FFI boundaries:
+1. **`compute_packet_crc(payload: str, seed: i64)`**: Calls `val crc = c_crc::jenny_c_crc32(payload.as_raw_ptr(), payload.len(), seed)` and returns `return CrcPacket { checksum: crc, byte_len: payload.len(), seed_used: seed }`.
+2. **`verify_prefix_and_hash(payload: str, expected_prefix: str, seed: i64)`**: Calls `val cmp = c_crc::jenny_c_memcmp_prefix(payload.as_raw_ptr(), expected_prefix.as_raw_ptr(), expected_prefix.len())`, checks `guard cmp == 0 else { raise FfiError.PrefixMismatch }`, then calls `val pkt = compute_packet_crc(payload, seed)?` and returns `return pkt.checksum`.
+
+```jenny
+module c_ffi_crc32
+
+import c "jenny_crc32.h" as c_crc
+
+pub enum FfiError {
+    EmptyInput,
+    InvalidSeed,
+    PrefixMismatch,
+}
+
+@repr(C)
+pub struct CrcPacket {
+    pub checksum: i64,
+    pub byte_len: i64,
+    pub seed_used: i64,
+    invariant self.byte_len >= 0
+}
+
+pub fn compute_packet_crc(payload: str, seed: i64) -> CrcPacket ! FfiError
+    effects [Unsafe]
+    requires payload.len() > 0 else FfiError.EmptyInput
+    requires seed >= 0 else FfiError.InvalidSeed
+    ensures result.byte_len == payload.len()
+    ensures result.checksum > 0
+
+pub fn verify_prefix_and_hash(payload: str, expected_prefix: str, seed: i64) -> i64 ! FfiError
+    effects [Unsafe]
+    requires payload.len() >= expected_prefix.len() else FfiError.PrefixMismatch
+    requires expected_prefix.len() > 0 else FfiError.EmptyInput
+    requires seed >= 0 else FfiError.InvalidSeed
+    ensures result > 0
+
+@example("EX-B22-01: zero-glue import c and explicit .as_raw_ptr() FFI checksum") {
+    val pkt = compute_packet_crc("JENNY_NATIVE_V1", 100)!
+    assert(pkt.byte_len == 15)
+    assert(pkt.seed_used == 100)
+    assert(pkt.checksum == 1268)
+
+    val verified_crc = verify_prefix_and_hash("JENNY_NATIVE_V1", "JENNY", 100)!
+    assert(verified_crc == 1268)
+}
+
+@example("EX-B22-02: reject prefix mismatch and empty input across FFI boundary") {
+    val mismatch = verify_prefix_and_hash("JENNY_NATIVE_V1", "RUST_", 100)
+    assert(mismatch is Err(FfiError.PrefixMismatch))
+
+    val empty_res = compute_packet_crc("", 100)
+    assert(empty_res is Err(FfiError.EmptyInput))
+}
+```

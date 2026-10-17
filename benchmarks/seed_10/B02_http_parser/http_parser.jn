@@ -1,0 +1,28 @@
+module http_parser
+
+pub fn parse_request(
+    raw_method: str,
+    raw_path: str,
+    version_minor: i32,
+    content_length: i64
+) -> HttpRequest ! ParseError {
+    guard raw_path.len > 0 else {
+        raise ParseError.MissingPath
+    }
+    guard version_minor == 0 || version_minor == 1 else {
+        raise ParseError.InvalidVersion
+    }
+    val ver_str = if version_minor == 1 { "HTTP/1.1" } else { "HTTP/1.0" }
+    val ka = version_minor == 1
+    return HttpRequest {
+        method: raw_method,
+        path: raw_path,
+        version: ver_str,
+        content_length: content_length,
+        keep_alive: ka,
+    }
+}
+
+pub fn is_post_with_body(req: HttpRequest) -> bool {
+    return req.content_length > 0
+}

@@ -1,0 +1,46 @@
+# B16: Managed Shared Handle (`^T`) Doubly-Linked LRU Nodes & Static `AllocGC` Effect (`LruDoublyLinked`)
+
+This module demonstrates Stage 2 (`Jenny-Mem v0.3`) **managed shared heap handles (`^T`)** and **`effects [AllocGC]` static capability contracts**, eliminating the high-hallucination `Rc<RefCell<Node>>` + `Weak<RefCell<Node>>` ceremony required in safe Rust for cyclic graphs:
+1. **`LruNode`**: Contains `key: i64`, `val_data: i64`, and bidirectional handles `prev: ^LruNode?` and `next: ^LruNode?`.
+2. **`alloc_lru_node(key: i64, val_data: i64) -> ^LruNode effects [AllocGC]`**: Explicitly declares `effects [AllocGC]` and allocates a managed node via `^LruNode { key: key, val_data: val_data, prev: null, next: null }` (allocating `^T` inside a pure function without `effects [AllocGC]` triggers compile-time `E0204_UNDECLARED_EFFECT`).
+3. **`link_two_nodes(mut head: ^LruNode, mut tail: ^LruNode)`**: Directly assigns `head.next = tail` and `tail.prev = head` with zero `.borrow_mut()` or `Rc::downgrade` boilerplate.
+4. **`sum_linked_pair(head: ^LruNode, tail: ^LruNode)`**: Traverses the bidirectional links to return `head.next.val_data + tail.prev.val_data` (equivalent to `tail.val_data + head.val_data`).
+5. **`run_lru_cycle_demo`**: Allocates `var n1 = alloc_lru_node(k1, v1)` and `var n2 = alloc_lru_node(k2, v2)`, calls `link_two_nodes(mut n1, mut n2)`, and returns `sum_linked_pair(n1, n2)`.
+
+```jenny
+module lru_doubly_linked
+
+pub struct LruNode {
+    pub key: i64,
+    pub val_data: i64,
+    pub prev: ^LruNode?,
+    pub next: ^LruNode?,
+}
+
+pub fn alloc_lru_node(key: i64, val_data: i64) -> ^LruNode
+    effects [AllocGC]
+    ensures active_gc_handles() == old(active_gc_handles()) + 1
+
+pub fn link_two_nodes(mut head: ^LruNode, mut tail: ^LruNode) -> void
+
+pub fn sum_linked_pair(head: ^LruNode, tail: ^LruNode) -> i64
+
+pub fn run_lru_cycle_demo(k1: i64, v1: i64, k2: i64, v2: i64) -> i64
+    effects [AllocGC]
+    ensures result == v1 + v2
+
+@example("EX-B16-01: cyclic ^LruNode doubly-linked pointers without Rc<RefCell> boilerplate") {
+    var head = alloc_lru_node(1, 100)
+    var tail = alloc_lru_node(2, 250)
+    link_two_nodes(mut head, mut tail)
+    assert(sum_linked_pair(head, tail) == 350)
+    gc_collect_all()
+    assert(active_gc_handles() == 0)
+}
+
+@example("EX-B16-02: end-to-end LRU cycle demo with AllocGC effect tracking") {
+    val total = run_lru_cycle_demo(10, 42, 20, 58)
+    assert(total == 100)
+    gc_collect_all()
+}
+```

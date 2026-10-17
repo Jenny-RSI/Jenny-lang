@@ -1,0 +1,96 @@
+# B01: Fixed-Capacity Ring Buffer (`RingBuffer`)
+
+This module provides a zero-heap-allocation, fixed-capacity (`8` `i32` elements) circular queue `RingBuffer`, designed for embedded sensor sampling windows, audio frame buffering, and high-throughput message queues.
+
+## Core Design Constraints
+1. **Zero Dynamic Allocation**: Uses an inline fixed-size array `[8]i32` with modulo wrap-around read/write indices.
+2. **Structural Invariants (`invariant`)**: Current element count `len` never exceeds `capacity` (`8`), and both `head` and `tail` indices remain strictly within `[0, capacity)`.
+3. **First-Class Contract Guards**:
+   - Before `push`, if the buffer is full, the precondition `requires ... else RingError.Full` intercepts the call with a deterministic error; on success, `ensures` guarantees `self.len == old(self.len) + 1`.
+   - Before `pop`, if the buffer is empty, `requires ... else RingError.Empty` intercepts the call; on success, `ensures` guarantees `self.len == old(self.len) - 1`.
+
+```jenny
+module ring_buffer
+
+pub enum RingError {
+    Full,
+    Empty,
+}
+
+pub struct RingBuffer {
+    pub data: [8]i32,
+    pub head: usize = 0,
+    pub tail: usize = 0,
+    pub len: usize = 0,
+    pub capacity: usize = 8,
+
+    invariant {
+        self.capacity == 8
+        self.len <= self.capacity
+        self.head < self.capacity
+        self.tail < self.capacity
+    }
+}
+
+impl RingBuffer {
+    pub fn new() -> RingBuffer
+        ensures result.len == 0
+        ensures result.capacity == 8
+
+    pub fn is_empty(self) -> bool
+        ensures result == (self.len == 0)
+
+    pub fn is_full(self) -> bool
+        ensures result == (self.len == self.capacity)
+
+    pub fn push(mut self, val: i32) -> void ! RingError
+        requires self.len < self.capacity else RingError.Full
+        ensures self.len == old(self.len) + 1
+
+    pub fn pop(mut self) -> i32 ! RingError
+        requires self.len > 0 else RingError.Empty
+        ensures self.len == old(self.len) - 1
+
+    pub fn peek(self) -> i32 ! RingError
+        requires self.len > 0 else RingError.Empty
+        ensures self.len == old(self.len)
+}
+
+@example("EX-B01-01: normal push, peek, pop and wrap-around") {
+    var rb = RingBuffer.new()
+    assert(rb.is_empty())
+
+    rb.push(10)!
+    rb.push(20)!
+    rb.push(30)!
+    assert(rb.len == 3)
+    assert(rb.peek()! == 10)
+
+    val first = rb.pop()!
+    assert(first == 10)
+    assert(rb.len == 2)
+
+    val second = rb.pop()!
+    val third = rb.pop()!
+    assert(second == 20)
+    assert(third == 30)
+    assert(rb.is_empty())
+}
+
+@example("EX-B01-02: boundary conditions Full and Empty errors") {
+    var rb = RingBuffer.new()
+    val empty_res = rb.pop()
+    assert(empty_res is RingError.Empty)
+
+    var i: i32 = 0
+    while i < 8 {
+        rb.push(i * 10)!
+        i += 1
+    }
+    assert(rb.is_full())
+
+    val full_res = rb.push(999)
+    assert(full_res is RingError.Full)
+    assert(rb.len == 8)
+}
+```

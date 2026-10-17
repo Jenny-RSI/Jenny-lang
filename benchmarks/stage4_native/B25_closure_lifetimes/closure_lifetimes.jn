@@ -1,0 +1,30 @@
+module closure_lifetimes
+
+pub fn alloc_signal_box(base_gain: i64, offset: i64) -> *SignalBox {
+    return *SignalBox { base_gain: base_gain, offset: offset }
+}
+
+pub fn apply_stack_pipeline(x: i64, f: fn(i64) -> i64) -> i64 {
+    return f(x) + f(x + 1)
+}
+
+pub fn run_stack_closure_demo(x: i64, factor: i64, bias: i64) -> i64 {
+    val mapper = fn(v) => v * factor + bias
+    return apply_stack_pipeline(x, mapper)
+}
+
+pub fn make_unique_amplifier(own sig: *SignalBox, extra: i64) -> *fn(i64) -> i64 {
+    return *fn[own sig](v) => v * sig.base_gain + sig.offset + extra
+}
+
+pub fn consume_unique_amplifier(x: i64, own amp: *fn(i64) -> i64) -> i64 {
+    return amp(x)
+}
+
+pub fn make_shared_scorer(weight: i64, threshold: i64) -> ^fn(i64) -> i64 {
+    return ^fn(v) => v * weight - threshold
+}
+
+pub fn eval_shared_pair(x1: i64, x2: i64, scorer: ^fn(i64) -> i64) -> i64 {
+    return scorer(x1) + scorer(x2)
+}

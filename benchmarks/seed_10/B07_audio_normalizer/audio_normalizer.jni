@@ -1,0 +1,58 @@
+# B07: Audio Frame Gain Amplifier & Hard-Clipping Limiter (`AudioNormalizer`)
+
+This module implements a 16-bit PCM audio sample gain amplifier and hard-clipping normalizer (`AudioNormalizer`).
+All normalized sample values are strictly bounded within `[-32768, 32767]`, and any clipping event automatically increments the `clipped_samples` counter.
+
+```jenny
+module audio_normalizer
+
+pub enum AudioError {
+    InvalidGain,
+    InvalidSampleRate,
+}
+
+pub struct NormalizerState {
+    pub sample_rate: i32 = 48000,
+    pub processed_samples: usize = 0,
+    pub clipped_samples: usize = 0,
+
+    invariant {
+        self.sample_rate > 0
+        self.clipped_samples <= self.processed_samples
+    }
+}
+
+impl NormalizerState {
+    pub fn new(sample_rate: i32) -> NormalizerState ! AudioError
+        requires sample_rate > 0 else AudioError.InvalidSampleRate
+        ensures result.processed_samples == 0
+        ensures result.clipped_samples == 0
+
+    pub fn normalize_sample(mut self, sample: i64, gain_num: i64, gain_den: i64) -> i64 ! AudioError
+        requires gain_num >= 0 && gain_den > 0 else AudioError.InvalidGain
+        ensures self.processed_samples == old(self.processed_samples) + 1
+        ensures result >= -32768 && result <= 32767
+}
+
+@example("EX-B07-01: PCM sample gain amplification and hard-clipping protection") {
+    var norm = NormalizerState.new(48000)!
+    val s1 = norm.normalize_sample(10000, 2, 1)!
+    assert(s1 == 20000)
+    assert(norm.processed_samples == 1)
+    assert(norm.clipped_samples == 0)
+
+    val s2 = norm.normalize_sample(20000, 2, 1)!
+    assert(s2 == 32767)
+    assert(norm.processed_samples == 2)
+    assert(norm.clipped_samples == 1)
+}
+
+@example("EX-B07-02: reject invalid sample rate and zero gain denominator") {
+    val bad_sr = NormalizerState.new(0)
+    assert(bad_sr is AudioError.InvalidSampleRate)
+
+    var norm = NormalizerState.new(44100)!
+    val bad_gain = norm.normalize_sample(1000, 2, 0)
+    assert(bad_gain is AudioError.InvalidGain)
+}
+```

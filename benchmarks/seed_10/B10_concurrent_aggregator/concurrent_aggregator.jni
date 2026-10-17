@@ -1,0 +1,67 @@
+# B10: Multi-Source Replica Race Selector & Timeout Circuit-Breaker Aggregator (`ConcurrentAggregator`)
+
+This module implements timeout circuit-breaking logic for multi-replica latency racing (`select_fastest_replica`) and dual-source aggregation (`aggregate_both_sources`).
+Preconditions (`requires`) enforce `timeout_ms > 0` and non-negative replica latencies, while `invariant` and `ensures` guarantee that any winning or aggregated latency never exceeds `timeout_ms`.
+
+```jenny
+module concurrent_aggregator
+
+pub enum AggError {
+    InvalidTimeout,
+    NegativeLatency,
+    AllReplicasTimedOut,
+    SourceTimedOut,
+}
+
+pub struct RaceOutcome {
+    pub winner_id: i32,
+    pub selected_latency_ms: i64,
+    pub timeout_ms: i64,
+
+    invariant {
+        self.winner_id == 1 || self.winner_id == 2
+        self.selected_latency_ms >= 0
+        self.selected_latency_ms <= self.timeout_ms
+    }
+}
+
+pub fn select_fastest_replica(
+    primary_latency_ms: i64,
+    secondary_latency_ms: i64,
+    timeout_ms: i64
+) -> RaceOutcome ! AggError
+    requires timeout_ms > 0 else AggError.InvalidTimeout
+    requires primary_latency_ms >= 0 && secondary_latency_ms >= 0 else AggError.NegativeLatency
+    ensures result.selected_latency_ms <= timeout_ms
+
+pub fn aggregate_both_sources(
+    val_a: i64,
+    lat_a_ms: i64,
+    val_b: i64,
+    lat_b_ms: i64,
+    timeout_ms: i64
+) -> i64 ! AggError
+    requires timeout_ms > 0 else AggError.InvalidTimeout
+    requires lat_a_ms >= 0 && lat_b_ms >= 0 else AggError.NegativeLatency
+
+@example("EX-B10-01: replica race selection and dual-source aggregation within SLA") {
+    val race1 = select_fastest_replica(85, 32, 100)!
+    assert(race1.winner_id == 2)
+    assert(race1.selected_latency_ms == 32)
+
+    val race2 = select_fastest_replica(45, 250, 100)!
+    assert(race2.winner_id == 1)
+    assert(race2.selected_latency_ms == 45)
+
+    val combined = aggregate_both_sources(100, 40, 250, 75, 100)!
+    assert(combined == 350)
+}
+
+@example("EX-B10-02: SLA timeout circuit breaking on race and all") {
+    val both_slow = select_fastest_replica(150, 220, 100)
+    assert(both_slow is AggError.AllReplicasTimedOut)
+
+    val one_slow = aggregate_both_sources(100, 40, 250, 120, 100)
+    assert(one_slow is AggError.SourceTimedOut)
+}
+```

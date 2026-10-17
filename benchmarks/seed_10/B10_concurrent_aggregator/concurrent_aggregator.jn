@@ -1,0 +1,31 @@
+module concurrent_aggregator
+
+pub fn select_fastest_replica(
+    primary_latency_ms: i64,
+    secondary_latency_ms: i64,
+    timeout_ms: i64
+) -> RaceOutcome ! AggError {
+    val best_lat = if primary_latency_ms <= secondary_latency_ms { primary_latency_ms } else { secondary_latency_ms }
+    val best_id: i32 = if primary_latency_ms <= secondary_latency_ms { 1 } else { 2 }
+    guard best_lat <= timeout_ms else {
+        raise AggError.AllReplicasTimedOut
+    }
+    return RaceOutcome {
+        winner_id: best_id,
+        selected_latency_ms: best_lat,
+        timeout_ms: timeout_ms,
+    }
+}
+
+pub fn aggregate_both_sources(
+    val_a: i64,
+    lat_a_ms: i64,
+    val_b: i64,
+    lat_b_ms: i64,
+    timeout_ms: i64
+) -> i64 ! AggError {
+    guard lat_a_ms <= timeout_ms && lat_b_ms <= timeout_ms else {
+        raise AggError.SourceTimedOut
+    }
+    return val_a + val_b
+}

@@ -1,0 +1,76 @@
+# B02: Zero-Copy HTTP Request Line & Header Summary Parser (`HttpParser`)
+
+This module implements a zero-heap-allocation, zero-copy HTTP/1.1 request metadata parser.
+The resulting `HttpRequest` holds read-only slice views (`str`) into the input buffer. In Jenny v2.0, the compiler automatically recognizes structs containing `str` or `[]T` as stack-bound views, eliminating explicit `<'a>` lifetime annotations.
+
+## Core Design Constraints
+1. **Implicit Stack-Bound Slice View**: `HttpRequest` contains `method: str`, `path: str`, and `version: str` without requiring `<'a>` or `view struct`.
+2. **Structural Invariants (`invariant`)**: Any constructed `HttpRequest` satisfies `method.len > 0`, `path.len > 0`, and `content_length >= 0`.
+3. **Preconditions & Postconditions**:
+   - `parse_request` requires input byte length `raw_len > 0`, otherwise raising `ParseError.EmptyInput`;
+   - On success, `ensures` verifies `result.method.len > 0` and `result.path.len > 0`.
+
+```jenny
+module http_parser
+
+pub enum ParseError {
+    EmptyInput,
+    MissingMethod,
+    MissingPath,
+    InvalidVersion,
+    NegativeLength,
+}
+
+pub struct HttpRequest {
+    pub method: str,
+    pub path: str,
+    pub version: str,
+    pub content_length: i64 = 0,
+    pub keep_alive: bool = true,
+
+    invariant {
+        self.method.len > 0
+        self.path.len > 0
+        self.content_length >= 0
+    }
+}
+
+pub fn parse_request(
+    raw_method: str,
+    raw_path: str,
+    version_minor: i32,
+    content_length: i64
+) -> HttpRequest ! ParseError
+    requires raw_method.len > 0 else ParseError.EmptyInput
+    requires content_length >= 0 else ParseError.NegativeLength
+    ensures result.method.len > 0
+    ensures result.path.len > 0
+    ensures result.content_length == content_length
+
+pub fn is_post_with_body(req: HttpRequest) -> bool
+    ensures result == (req.content_length > 0)
+
+@example("EX-B02-01: valid zero-copy HTTP/1.1 request parsing") {
+    val req = parse_request("POST", "/api/v1/spin", 1, 128)!
+    assert(req.method == "POST")
+    assert(req.path == "/api/v1/spin")
+    assert(req.version == "HTTP/1.1")
+    assert(req.content_length == 128)
+    assert(req.keep_alive)
+    assert(is_post_with_body(req))
+}
+
+@example("EX-B02-02: reject invalid HTTP requests via contracts and guards") {
+    val err_empty = parse_request("", "/index.html", 1, 0)
+    assert(err_empty is ParseError.EmptyInput)
+
+    val err_path = parse_request("GET", "", 1, 0)
+    assert(err_path is ParseError.MissingPath)
+
+    val err_ver = parse_request("GET", "/health", 9, 0)
+    assert(err_ver is ParseError.InvalidVersion)
+
+    val err_len = parse_request("POST", "/upload", 1, -5)
+    assert(err_len is ParseError.NegativeLength)
+}
+```

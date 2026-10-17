@@ -1,0 +1,37 @@
+module order_pipeline
+
+pub fn query_stock(sku_id: i32) -> i32 ! DbError {
+    guard sku_id != 999 else {
+        raise DbError.ConnectionTimeout
+    }
+    return 10
+}
+
+pub fn settle_order(
+    order_id: i64,
+    sku_id: i32,
+    quantity: i32,
+    unit_cents: i64,
+    discount_cents: i64
+) -> OrderReceipt ! (OrderBizError | AnyError) {
+    val available = query_stock(sku_id)?
+    guard quantity <= available else {
+        raise OrderBizError.OutOfStock
+    }
+    val gross = quantity.as<i64>() * unit_cents
+    guard discount_cents <= gross else {
+        raise OrderBizError.CouponExceedsGross
+    }
+    val final_amt = gross - discount_cents
+    return OrderReceipt {
+        order_id: order_id,
+        gross_cents: gross,
+        discount_cents: discount_cents,
+        final_cents: final_amt,
+    }
+}
+
+pub fn checkout_endpoint(order_id: i64, sku_id: i32, quantity: i32) -> i64! {
+    val receipt = settle_order(order_id, sku_id, quantity, 2000, 200)?
+    return receipt.final_cents
+}

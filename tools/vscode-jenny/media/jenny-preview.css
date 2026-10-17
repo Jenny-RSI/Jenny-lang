@@ -1,0 +1,23 @@
+/* Jenny Literate Blueprint (.jni) Markdown Preview Styles */
+pre:has(> code.language-jenny),
+pre:has(> code.language-jn) {
+  position: relative;
+  border-left: 4px solid #38bdf8;
+  border-radius: 6px;
+  padding-top: 28px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+pre:has(> code.language-jenny)::before,
+pre:has(> code.language-jn)::before {
+  content: "⚡ JENNY v2.0 FORMAL CONTRACT & BLUEPRINT";
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #38bdf8;
+  opacity: 0.85;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

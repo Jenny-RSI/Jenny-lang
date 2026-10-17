@@ -1,0 +1,49 @@
+# B21: Declarative CRUD Service with Audit & Cache (`spin_crud_service`)
+
+This Stage 3 (`Jenny-Spin v0.4`) benchmark evaluates `@apply(crud::service(table: "accounts", cache_ttl: 300, max_retries: 3))`:
+1. **`@apply(crud::service(...))`**: Automatically synthesizes `AccountService.new()`, `create_account(mut self, initial_balance)`, `deposit(mut self, amount)`, `query_summary(mut self)`, and `delete_account(mut self, balance_to_remove)` into `.spun/spin_crud_service.spun.jn`.
+2. **`execute_account_batch(init_a: i64, init_b: i64, topup: i64)`**: Creates `var svc = AccountService.new()`, calls `svc.create_account(init_a)?`, `svc.create_account(init_b)?`, `svc.deposit(topup)?`, `svc.delete_account(init_a)?`, and returns `svc.query_summary()`.
+
+```jenny
+module spin_crud_service
+
+pub enum ServiceError {
+    NotFound,
+    DuplicateKey,
+    InvalidBalance,
+    QuotaExceeded,
+}
+
+@apply(crud::service(table: "accounts", cache_ttl: 300, max_retries: 3))
+pub struct AccountService {
+    pub active_count: i64 = 0,
+    pub total_balance: i64 = 0,
+    pub cache_hits: i64 = 0,
+    pub audit_seq: i64 = 0,
+    invariant self.active_count >= 0 && self.active_count <= 1000
+    invariant self.total_balance >= 0 && self.audit_seq >= 0
+}
+
+pub fn execute_account_batch(init_a: i64, init_b: i64, topup: i64) -> i64 ! ServiceError
+    requires init_a >= 0 && init_b >= 0 && topup > 0 else ServiceError.InvalidBalance
+    ensures result > 0
+
+@example("EX-B21-01: synthesize CRUD service operations, audit log, and cache counter") {
+    val summary = execute_account_batch(100, 200, 50)?
+    assert(summary == 25011)
+
+    var svc = AccountService.new()
+    svc.create_account(500)?
+    assert(svc.query_summary() == 50011)
+    assert(svc.audit_seq == 1 && svc.cache_hits == 1)
+}
+
+@example("EX-B21-02: enforce CRUD service error guards on missing account and invalid balance") {
+    var svc = AccountService.new()
+    val empty_dep = svc.deposit(100)
+    assert(empty_dep is ServiceError.NotFound)
+
+    val neg_create = svc.create_account(-10)
+    assert(neg_create is ServiceError.InvalidBalance)
+}
+```

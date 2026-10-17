@@ -1,0 +1,86 @@
+# B11: Four-Layer Microservice Gateway Call Chain & Three-Tier Error Truncation (`LayeredGateway`)
+
+This module validates Stage 1 (`Jenny-Flow v0.2`) across a **four-layer call chain (`Storage/Cache -> Repository -> DomainService -> Controller`)**, combining **16-byte register-inline `AnyError`**, a **16-slot zero-cost Error Trace RingBuffer**, **in-place `catch` fallback recovery**, and **call-site named arguments (`key: val`)** to eliminate cross-layer error wrapper boilerplate.
+
+## Four-Layer Error Topology & Business Rules
+1. **Layer 1 (Infrastructure)**:
+   * `cache_get_price`: executes `guard sku_id == 10 else { raise RedisError.CacheMiss }` and returns `1000` on hit;
+   * `db_get_price`: executes `guard sku_id != 500 else { raise DbError.Deadlock }` and `guard sku_id == 20 else { raise DbError.RecordMissing }`, returning `2000` when both pass.
+2. **Layer 2 (Repository + `catch` Fallback)**: `repo_resolve_price` uses `val price = cache_get_price(sku_id) catch err { db_get_price(sku_id)? }` to fall back to the database on a Redis cache miss and return `price`.
+3. **Layer 3 (Domain Service + Hybrid Truncation)**: `service_settle_checkout` calls `val unit_price = repo_resolve_price(sku_id)?`, computes `val subtotal = unit_price * qty.as<i64>()`, checks `guard subtotal <= 50000 else { raise GatewayBizError.CreditLimitExceeded }`, computes `val tax_cents = (subtotal * tax_bps) / 10000` and `val total_charged = subtotal + tax_cents`, and returns `GatewayReceipt`.
+4. **Layer 4 (Gateway Controller + Named Arguments)**: `controller_handle_checkout` invokes `val receipt = service_settle_checkout(user_id: user_id, sku_id: sku_id, qty: qty, tax_bps: 800)?` with default `tax_bps: 800` and returns `receipt.total_charged`.
+
+```jenny
+module layered_gateway
+
+pub enum RedisError {
+    CacheMiss,
+    SocketClosed,
+}
+
+pub enum DbError {
+    Deadlock,
+    ConnReset,
+    RecordMissing,
+}
+
+pub enum GatewayBizError {
+    InvalidQuantity,
+    CreditLimitExceeded,
+}
+
+pub struct GatewayReceipt {
+    pub user_id: i64,
+    pub subtotal: i64,
+    pub tax_cents: i64,
+    pub total_charged: i64,
+
+    invariant {
+        self.subtotal >= 0
+        self.tax_cents >= 0
+        self.total_charged >= self.subtotal
+        self.total_charged == self.subtotal + self.tax_cents
+    }
+}
+
+pub fn cache_get_price(sku_id: i32) -> i64 ! RedisError
+    requires sku_id > 0 else RedisError.CacheMiss
+    ensures result > 0
+
+pub fn db_get_price(sku_id: i32) -> i64 ! DbError
+    requires sku_id > 0 else DbError.RecordMissing
+    ensures result > 0
+
+pub fn repo_resolve_price(sku_id: i32) -> i64!
+    ensures result > 0
+
+pub fn service_settle_checkout(
+    user_id: i64,
+    sku_id: i32,
+    qty: i32,
+    tax_bps: i64
+) -> GatewayReceipt ! (GatewayBizError | AnyError)
+    requires qty > 0 else GatewayBizError.InvalidQuantity
+    requires tax_bps >= 0 else GatewayBizError.InvalidQuantity
+    ensures result.total_charged >= result.subtotal
+
+pub fn controller_handle_checkout(user_id: i64, sku_id: i32, qty: i32) -> i64!
+    ensures result > 0
+
+@example("EX-B11-01: 4-layer normal checkout, named args, and Redis->DB catch fallback") {
+    val hit_total = controller_handle_checkout(user_id: 77, sku_id: 10, qty: 2)!
+    assert(hit_total == 2160)
+
+    val fallback_total = controller_handle_checkout(user_id: 77, sku_id: 20, qty: 3)!
+    assert(fallback_total == 6480)
+}
+
+@example("EX-B11-02: AnyError 16B layout, dynamic downcasting, and 4-hop Error Trace RingBuffer") {
+    val biz_err = service_settle_checkout(user_id: 77, sku_id: 10, qty: 500, tax_bps: 800)
+    assert(biz_err is GatewayBizError.CreditLimitExceeded)
+
+    val infra_err = controller_handle_checkout(user_id: 77, sku_id: 500, qty: 1)
+    assert(infra_err is DbError.Deadlock)
+    assert(trace_depth() == 4)
+}
+```

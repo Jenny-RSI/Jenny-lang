@@ -1,0 +1,66 @@
+# B06: Streaming Log Aggregator & Latency Watermark Tracker (`LogAggregator`)
+
+This module implements a high-throughput streaming log aggregator (`LogAggregator`) that summarizes incoming log severity levels (`1=Info, 2=Warn, 3=Error`) and request latencies (`latency_ms`) in real time.
+Its `invariant` guarantees `error_count <= total_logs` and non-negative maximum latency, while `ensures` verifies monotonic counter increments after each ingested log entry.
+
+```jenny
+module log_aggregator
+
+pub enum LogError {
+    InvalidLevel,
+    NegativeLatency,
+}
+
+pub struct LogAggregator {
+    pub total_logs: usize = 0,
+    pub warn_count: usize = 0,
+    pub error_count: usize = 0,
+    pub total_latency_ms: i64 = 0,
+    pub max_latency_ms: i64 = 0,
+
+    invariant {
+        self.error_count <= self.total_logs
+        self.warn_count <= self.total_logs
+        self.total_latency_ms >= 0
+        self.max_latency_ms >= 0
+    }
+}
+
+impl LogAggregator {
+    pub fn new() -> LogAggregator
+        ensures result.total_logs == 0
+        ensures result.max_latency_ms == 0
+
+    pub fn ingest(mut self, level: i32, latency_ms: i64) -> void ! LogError
+        requires level >= 1 && level <= 3 else LogError.InvalidLevel
+        requires latency_ms >= 0 else LogError.NegativeLatency
+        ensures self.total_logs == old(self.total_logs) + 1
+        ensures self.total_latency_ms == old(self.total_latency_ms) + latency_ms
+        ensures self.max_latency_ms >= latency_ms
+
+    pub fn is_unhealthy(self, max_allowed_errors: usize) -> bool
+        ensures result == (self.error_count > max_allowed_errors)
+}
+
+@example("EX-B06-01: streaming log ingestion and peak latency tracking") {
+    var agg = LogAggregator.new()
+    agg.ingest(1, 25)!
+    agg.ingest(2, 120)!
+    agg.ingest(3, 85)!
+    assert(agg.total_logs == 3)
+    assert(agg.warn_count == 1)
+    assert(agg.error_count == 1)
+    assert(agg.total_latency_ms == 230)
+    assert(agg.max_latency_ms == 120)
+    assert(!agg.is_unhealthy(2))
+}
+
+@example("EX-B06-02: reject invalid log level or negative latency") {
+    var agg = LogAggregator.new()
+    val err_lvl = agg.ingest(9, 10)
+    assert(err_lvl is LogError.InvalidLevel)
+
+    val err_lat = agg.ingest(1, -5)
+    assert(err_lat is LogError.NegativeLatency)
+}
+```

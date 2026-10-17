@@ -1,0 +1,51 @@
+# B15: Region Arena (`*in(arena)`) Arithmetic AST Builder & Evaluator (`ArenaAstBuilder`)
+
+This module demonstrates Stage 2 (`Jenny-Mem v0.3`) **O(1) linear bump allocation (`*in(arena) T`)**:
+1. **`AstNode`**: Arithmetic AST node where `op_code == 0` denotes a literal (`lit_val`), `op_code == 1` denotes addition (`lhs_val + rhs_val`), and `op_code == 2` denotes multiplication (`lhs_val * rhs_val`).
+2. **`alloc_lit_node(mut arena: Arena, v: i64)`**: Allocates a literal node in `arena` via `*in(arena) AstNode { op_code: 0, lit_val: v, lhs_val: 0, rhs_val: 0 }`, automatically incrementing `arena.alloc_count()` by 1.
+3. **`alloc_bin_node(mut arena: Arena, op_code: i32, lhs: *AstNode, rhs: *AstNode)`**: Evaluates `val l = eval_ast_node(lhs)` and `val r = eval_ast_node(rhs)`, then allocates a binary node in `arena` via `*in(arena) AstNode { op_code: op_code, lit_val: 0, lhs_val: l, rhs_val: r }`.
+4. **`eval_ast_node(node: *AstNode)`**: Returns `node.lit_val` if `node.op_code == 0`; returns `node.lhs_val + node.rhs_val` if `node.op_code == 1`; otherwise returns `node.lhs_val * node.rhs_val`.
+5. **`eval_formula_in_arena(a: i64, b: i64, c: i64)`**: Creates `var arena = Arena.new(4096)`, allocates `val na = alloc_lit_node(mut arena, a)`, `val nb = alloc_lit_node(mut arena, b)`, and `val nc = alloc_lit_node(mut arena, c)`, builds `val sum_node = alloc_bin_node(mut arena, 1, na, nb)` and `val mul_node = alloc_bin_node(mut arena, 2, sum_node, nc)`, computes `val res = eval_ast_node(mul_node)`, drops the entire region in O(1) via `arena.drop()`, and returns `res` (`(a + b) * c`).
+
+```jenny
+module arena_ast
+
+pub struct AstNode {
+    pub op_code: i32,
+    pub lit_val: i64,
+    pub lhs_val: i64,
+    pub rhs_val: i64,
+    invariant self.op_code >= 0 && self.op_code <= 2
+}
+
+pub fn eval_ast_node(node: *AstNode) -> i64
+
+pub fn alloc_lit_node(mut arena: Arena, v: i64) -> *AstNode
+    ensures arena.alloc_count() == old(arena.alloc_count()) + 1
+
+pub fn alloc_bin_node(mut arena: Arena, op_code: i32, lhs: *AstNode, rhs: *AstNode) -> *AstNode
+    requires op_code == 1 || op_code == 2
+    ensures arena.alloc_count() == old(arena.alloc_count()) + 1
+
+pub fn eval_formula_in_arena(a: i64, b: i64, c: i64) -> i64
+    ensures result == (a + b) * c
+    ensures active_native_boxes() == 0
+
+@example("EX-B15-01: O(1) *in(arena) AST construction and batch release") {
+    var arena = Arena.new(4096)
+    val n1 = alloc_lit_node(mut arena, 10)
+    val n2 = alloc_lit_node(mut arena, 20)
+    val add_node = alloc_bin_node(mut arena, 1, n1, n2)
+    assert(arena.alloc_count() == 3)
+    assert(arena.used_bytes() > 0)
+    assert(eval_ast_node(add_node) == 30)
+    arena.drop()
+    assert(arena.used_bytes() == 0)
+}
+
+@example("EX-B15-02: evaluate nested (a + b) * c with zero individual heap boxes") {
+    val res = eval_formula_in_arena(7, 8, 4)
+    assert(res == 60)
+    assert(active_native_boxes() == 0)
+}
+```

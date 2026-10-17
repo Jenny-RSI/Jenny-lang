@@ -1,0 +1,31 @@
+module pcm_frame_pipeline
+
+pub fn alloc_frame(s0: i64, s1: i64, s2: i64, s3: i64) -> *PcmFrame {
+    return *PcmFrame { s0: s0, s1: s1, s2: s2, s3: s3, sample_rate: 48000 }
+}
+
+impl PcmFrame {
+    pub fn peak_energy(self) -> i64 {
+        return self.s0 * self.s0 + self.s1 * self.s1 + self.s2 * self.s2 + self.s3 * self.s3
+    }
+
+    pub fn apply_gain(mut self, factor: i64) -> void ! FrameError {
+        self.s0 = self.s0 * factor
+        self.s1 = self.s1 * factor
+        self.s2 = self.s2 * factor
+        self.s3 = self.s3 * factor
+    }
+}
+
+pub fn consume_and_archive(own frame: *PcmFrame) -> i64 {
+    return frame.s0 + frame.s1 + frame.s2 + frame.s3
+}
+
+pub fn process_audio_transcode(s0: i64, s1: i64, s2: i64, s3: i64, gain: i64) -> i64 ! FrameError {
+    var frame = alloc_frame(s0, s1, s2, s3)
+    frame.apply_gain(gain)?
+    guard frame.peak_energy() > 0 else {
+        raise FrameError.SilenceDetected
+    }
+    return consume_and_archive(own frame)
+}

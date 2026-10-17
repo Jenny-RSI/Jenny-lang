@@ -1,0 +1,67 @@
+# B25: Three-Track Closure Lifetimes (`closure_lifetimes`)
+
+This module validates the **Three-Track Closure Lifetimes** model defined in the Jenny v2.0 specification ([`01_memory_and_ownership.md`](../../../docs/design/specs/01_memory_and_ownership.md) and [`03_syntax_and_control_flow.md`](../../../docs/design/specs/03_syntax_and_control_flow.md)):
+
+1. **Track 1: Non-Escaping Stack-Borrowed Closure (`fn(i64) -> i64`)** — 16-byte stack fat pointer that captures outer variables by read-only borrow by default with **zero heap allocation and zero GC overhead**, statically forbidding stack-frame escape (`E0205_STACK_CLOSURE_ESCAPE`).
+2. **Track 2: Unique Native Heap Escaping Closure (`*fn(i64) -> i64` and `*fn[own sig](v) => ...`)** — Enforces explicit `[own sig]` ownership transfer for captured unique pointers (`E0206_CLOSURE_MISSING_OWN_CAPTURE`) and performs **deterministic cascading deallocation** of both the closure environment and its owned `*SignalBox` via generated `drop_env` upon `own` consumption.
+3. **Track 3: Managed Shared Heap Escaping Closure (`^fn(i64) -> i64` and `^fn(v) => ...`)** — Governed by the static `effects [AllocGC]` capability contract (`E0204_UNDECLARED_EFFECT`), supporting cross-function return and multi-consumer shared invocation reclaimed by the managed pool.
+
+```jenny
+module closure_lifetimes
+
+pub struct SignalBox {
+    pub base_gain: i64,
+    pub offset: i64,
+
+    invariant self.base_gain > 0
+}
+
+pub fn alloc_signal_box(base_gain: i64, offset: i64) -> *SignalBox
+    requires base_gain > 0
+    ensures active_native_boxes() == old(active_native_boxes()) + 1
+
+pub fn apply_stack_pipeline(x: i64, f: fn(i64) -> i64) -> i64
+
+pub fn run_stack_closure_demo(x: i64, factor: i64, bias: i64) -> i64
+    ensures active_native_boxes() == old(active_native_boxes())
+    ensures active_gc_handles() == old(active_gc_handles())
+    ensures result == (x * factor + bias) + ((x + 1) * factor + bias)
+
+pub fn make_unique_amplifier(own sig: *SignalBox, extra: i64) -> *fn(i64) -> i64
+    ensures active_native_boxes() == old(active_native_boxes()) + 1
+
+pub fn consume_unique_amplifier(x: i64, own amp: *fn(i64) -> i64) -> i64
+    ensures active_native_boxes() == old(active_native_boxes()) - 2
+
+pub fn make_shared_scorer(weight: i64, threshold: i64) -> ^fn(i64) -> i64
+    effects [AllocGC]
+    ensures active_gc_handles() == old(active_gc_handles()) + 1
+
+pub fn eval_shared_pair(x1: i64, x2: i64, scorer: ^fn(i64) -> i64) -> i64
+
+@example("EX-B25-01: Track 1 stack-bound closure fn(i64)->i64 with zero heap or GC allocation") {
+    val res = run_stack_closure_demo(5, 3, 2)
+    assert(res == 37)
+    assert(active_native_boxes() == 0)
+    assert(active_gc_handles() == 0)
+}
+
+@example("EX-B25-02: Track 2 *fn[own sig] unique escaping closure with deterministic cascade drop") {
+    val sig = alloc_signal_box(4, 10)
+    assert(active_native_boxes() == 1)
+    val amp = make_unique_amplifier(own sig, 5)
+    assert(active_native_boxes() == 2)
+    val out = consume_unique_amplifier(6, own amp)
+    assert(out == 39)
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-B25-03: Track 3 ^fn managed GC closure with AllocGC effect and pool collection") {
+    val scorer = make_shared_scorer(10, 7)
+    assert(active_gc_handles() == 1)
+    val score_sum = eval_shared_pair(3, 5, scorer)
+    assert(score_sum == 66)
+    gc_collect_all()
+    assert(active_gc_handles() == 0)
+}
+```

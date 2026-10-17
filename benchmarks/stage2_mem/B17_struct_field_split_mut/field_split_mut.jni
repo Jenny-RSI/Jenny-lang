@@ -1,0 +1,48 @@
+# B17: Read/Write Split & `E0502`-Free Nested Method Calls (`StructFieldSplitMut`)
+
+This module demonstrates how Stage 2 (`Jenny-Mem v0.3`) **tri-state parameter boundaries (default read-only `self` vs in-place mutable `mut self`) and evaluation order normalization** eliminate Rust's classic false-positive `E0502 (cannot borrow *self as mutable because it is also borrowed as immutable)` deadlock:
+1. **`MotionController`**: Tracks `position: i64 = 0`, `base_step: i64 = 10`, `max_limit: i64 = 1000`, and `ticks: i32 = 0`.
+2. **`effective_delta(self, scale: i64)`**: Default read-only borrow; computes `self.base_step * scale`.
+3. **`apply_step(mut self, delta: i64)`**: In-place mutable `mut self`; increments `self.ticks += 1`, computes `val next_pos = self.position + delta`, clamps `self.position` to `self.max_limit` if `next_pos > self.max_limit` (else `next_pos`), and returns the updated `self.position`.
+4. **`tick_with_scale(mut self, scale: i64)`**: Directly writes the nested call `return self.apply_step(self.effective_delta(scale))` (the compiler automatically evaluates the inner read-only `self.effective_delta(scale)` before invoking the outer `mut self.apply_step(...)`, with zero `E0502` conflict).
+
+```jenny
+module field_split_mut
+
+pub struct MotionController {
+    pub position: i64 = 0,
+    pub base_step: i64 = 10,
+    pub max_limit: i64 = 1000,
+    pub ticks: i32 = 0,
+    invariant self.max_limit > 0
+    invariant self.position <= self.max_limit
+}
+
+impl MotionController {
+    pub fn new(base_step: i64, max_limit: i64) -> MotionController
+        requires base_step > 0 && max_limit > 0
+        ensures result.position == 0 && result.ticks == 0
+
+    pub fn effective_delta(self, scale: i64) -> i64
+        ensures result == self.base_step * scale
+
+    pub fn apply_step(mut self, delta: i64) -> i64
+        ensures self.ticks == old(self.ticks) + 1
+        ensures result == self.position
+
+    pub fn tick_with_scale(mut self, scale: i64) -> i64
+        ensures self.ticks == old(self.ticks) + 1
+        ensures result == self.position
+}
+
+@example("EX-B17-01: nested mut self + read-only self call without E0502 borrow deadlock") {
+    var ctrl = MotionController.new(15, 100)
+    val p1 = ctrl.tick_with_scale(3)
+    assert(p1 == 45)
+    assert(ctrl.ticks == 1)
+
+    val p2 = ctrl.tick_with_scale(5)
+    assert(p2 == 100)
+    assert(ctrl.ticks == 2)
+}
+```

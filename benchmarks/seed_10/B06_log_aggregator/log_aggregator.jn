@@ -1,0 +1,28 @@
+module log_aggregator
+
+impl LogAggregator {
+    pub fn new() -> LogAggregator {
+        return LogAggregator {
+            total_logs: 0,
+            warn_count: 0,
+            error_count: 0,
+            total_latency_ms: 0,
+            max_latency_ms: 0,
+        }
+    }
+
+    pub fn ingest(mut self, level: i32, latency_ms: i64) -> void ! LogError {
+        self.total_logs += 1
+        val warn_inc: usize = if level == 2 { 1 } else { 0 }
+        val err_inc: usize = if level == 3 { 1 } else { 0 }
+        self.warn_count += warn_inc
+        self.error_count += err_inc
+        self.total_latency_ms += latency_ms
+        val next_max = if latency_ms > self.max_latency_ms { latency_ms } else { self.max_latency_ms }
+        self.max_latency_ms = next_max
+    }
+
+    pub fn is_unhealthy(self, max_allowed_errors: usize) -> bool {
+        return self.error_count > max_allowed_errors
+    }
+}

@@ -1,0 +1,38 @@
+module ring_buffer
+
+impl RingBuffer {
+    pub fn new() -> RingBuffer {
+        return RingBuffer {
+            data: [0, 0, 0, 0, 0, 0, 0, 0],
+            head: 0,
+            tail: 0,
+            len: 0,
+            capacity: 8,
+        }
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.len == 0
+    }
+
+    pub fn is_full(self) -> bool {
+        return self.len == self.capacity
+    }
+
+    pub fn push(mut self, val: i32) -> void ! RingError {
+        self.data[self.tail] = val
+        self.tail = (self.tail + 1) % self.capacity
+        self.len += 1
+    }
+
+    pub fn pop(mut self) -> i32 ! RingError {
+        val item = self.data[self.head]
+        self.head = (self.head + 1) % self.capacity
+        self.len -= 1
+        return item
+    }
+
+    pub fn peek(self) -> i32 ! RingError {
+        return self.data[self.head]
+    }
+}

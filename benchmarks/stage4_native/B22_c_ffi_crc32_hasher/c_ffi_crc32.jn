@@ -1,0 +1,21 @@
+module c_ffi_crc32
+
+import c "jenny_crc32.h" as c_crc
+
+pub fn compute_packet_crc(payload: str, seed: i64) -> CrcPacket ! FfiError
+    effects [Unsafe]
+{
+    val crc = c_crc::jenny_c_crc32(payload.as_raw_ptr(), payload.len(), seed)
+    return CrcPacket { checksum: crc, byte_len: payload.len(), seed_used: seed }
+}
+
+pub fn verify_prefix_and_hash(payload: str, expected_prefix: str, seed: i64) -> i64 ! FfiError
+    effects [Unsafe]
+{
+    val cmp = c_crc::jenny_c_memcmp_prefix(payload.as_raw_ptr(), expected_prefix.as_raw_ptr(), expected_prefix.len())
+    if cmp != 0 {
+        raise FfiError.PrefixMismatch
+    }
+    val pkt = compute_packet_crc(payload, seed)?
+    return pkt.checksum
+}

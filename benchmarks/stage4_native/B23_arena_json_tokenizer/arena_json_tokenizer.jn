@@ -1,0 +1,37 @@
+module arena_json_tokenizer
+
+pub fn scan_json_object(payload: str, mut arena: Arena) -> *JsonStats ! JsonScanError {
+    val n = payload.len()
+    if payload.byte_at(0) != 123 || payload.byte_at(n - 1) != 125 {
+        raise JsonScanError.UnbalancedBraces
+    }
+    var colons: i64 = 0
+    var commas: i64 = 0
+    var idx: i64 = 1
+    while idx < n - 1 {
+        val b = payload.byte_at(idx)
+        if b == 58 {
+            colons = colons + 1
+        }
+        if b == 44 {
+            commas = commas + 1
+        }
+        idx = idx + 1
+    }
+    if n > 2 && colons != commas + 1 {
+        raise JsonScanError.MissingColon
+    }
+    return *in(arena) JsonStats {
+        pair_count: colons,
+        colon_count: colons,
+        byte_len: n
+    }
+}
+
+pub fn validate_and_count_keys(payload: str) -> i64 ! JsonScanError {
+    var arena = Arena.new(256)
+    val stats = scan_json_object(payload, mut arena)?
+    val count = stats.pair_count
+    arena.drop()
+    return count
+}

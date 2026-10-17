@@ -1,0 +1,107 @@
+{
+  "name": "vscode-jenny",
+  "displayName": "Spinning Jenny (.jni Blueprint & .jn Language Support)",
+  "description": "Literate Blueprint (.jni) Markdown rendering, Jenny v2.0 syntax highlighting, real-time contract diagnostics (--ai-json), and @example sandbox runner.",
+  "version": "0.2.0",
+  "publisher": "jenny-lang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:jenny",
+    "onLanguage:markdown",
+    "workspaceContains:**/*.jni",
+    "workspaceContains:**/*.jn"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "jenny",
+        "aliases": [
+          "Jenny",
+          "jenny",
+          "jn"
+        ],
+        "extensions": [
+          ".jn",
+          ".spun.jn"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "jenny",
+        "scopeName": "source.jenny",
+        "path": "./syntaxes/jenny.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.jenny.codeblock",
+        "path": "./syntaxes/jenny-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.jenny": "jenny"
+        }
+      }
+    ],
+    "markdown.previewStyles": [
+      "./media/jenny-preview.css"
+    ],
+    "configurationDefaults": {
+      "files.associations": {
+        "*.jni": "markdown",
+        "*.jn": "jenny",
+        "*.spun.jn": "jenny"
+      }
+    },
+    "commands": [
+      {
+        "command": "jenny.runExamples",
+        "title": "Jenny: Run @example Contract Sandbox Tests",
+        "icon": "$(play)"
+      },
+      {
+        "command": "jenny.generateSkeleton",
+        "title": "Jenny: Generate .jn Skeleton from .jni Blueprint",
+        "icon": "$(symbol-interface)"
+      },
+      {
+        "command": "jenny.previewBlueprint",
+        "title": "Jenny: Preview .jni Literate Blueprint",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "jenny.checkFile",
+        "title": "Jenny: Check Contracts & v2.0 Syntax (--ai-json)",
+        "icon": "$(check)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "jenny.runExamples",
+          "when": "resourceExtname == .jni || resourceExtname == .jn",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jenny.previewBlueprint",
+          "when": "resourceExtname == .jni",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jenny.generateSkeleton",
+          "when": "resourceExtname == .jni",
+          "group": "navigation@3"
+        }
+      ]
+    }
+  }
+}

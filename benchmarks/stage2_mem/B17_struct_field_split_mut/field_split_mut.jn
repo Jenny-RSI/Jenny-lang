@@ -1,0 +1,31 @@
+module field_split_mut
+
+impl MotionController {
+    pub fn new(base_step: i64, max_limit: i64) -> MotionController {
+        return MotionController {
+            position: 0,
+            base_step: base_step,
+            max_limit: max_limit,
+            ticks: 0,
+        }
+    }
+
+    pub fn effective_delta(self, scale: i64) -> i64 {
+        return self.base_step * scale
+    }
+
+    pub fn apply_step(mut self, delta: i64) -> i64 {
+        self.ticks += 1
+        val next_pos = self.position + delta
+        if next_pos > self.max_limit {
+            self.position = self.max_limit
+        } else {
+            self.position = next_pos
+        }
+        return self.position
+    }
+
+    pub fn tick_with_scale(mut self, scale: i64) -> i64 {
+        return self.apply_step(self.effective_delta(scale))
+    }
+}

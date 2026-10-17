@@ -1,0 +1,23 @@
+module storage_decorator
+
+impl TrackedStorage {
+    pub fn new(quota_bytes: usize) -> TrackedStorage ! StorageError {
+        return TrackedStorage {
+            quota_bytes: quota_bytes,
+            used_bytes: 0,
+            read_ops: 0,
+            write_ops: 0,
+        }
+    }
+
+    pub fn write_block(mut self, payload_bytes: usize) -> usize ! StorageError {
+        self.used_bytes += payload_bytes
+        self.write_ops += 1
+        return self.used_bytes
+    }
+
+    pub fn read_block(mut self) -> usize {
+        self.read_ops += 1
+        return self.used_bytes
+    }
+}

@@ -1,0 +1,60 @@
+# B13: Unique Native Heap Audio Frame Pipeline & Zero-Leak Early Return (`PcmFramePipeline`)
+
+This module demonstrates Stage 2 (`Jenny-Mem v0.3`) **unique native heap pointers (`*T`)**, **tri-state parameter passing (default read-only / `mut` in-place mutation / `own` ownership consumption)**, and **automatic RAII drop weaving across early-return error paths (preventing CWE-401 memory leaks)**:
+1. **`alloc_frame`**: Allocates `*PcmFrame { s0: s0, s1: s1, s2: s2, s3: s3, sample_rate: 48000 }` on the unique native heap, incrementing `active_native_boxes()` by 1.
+2. **`PcmFrame.peak_energy(self)`**: Default read-only borrow; computes the squared energy sum `self.s0 * self.s0 + self.s1 * self.s1 + self.s2 * self.s2 + self.s3 * self.s3` while retaining caller ownership.
+3. **`PcmFrame.apply_gain(mut self, factor: i64)`**: In-place mutable borrow; multiplies `s0, s1, s2, s3` by `factor`.
+4. **`consume_and_archive(own frame: *PcmFrame)`**: Explicitly takes and consumes ownership of `frame`, returns the 4-channel sample sum `frame.s0 + frame.s1 + frame.s2 + frame.s3`, and automatically frees `frame` at scope exit (any subsequent caller access triggers `E0201_USE_AFTER_OWN`).
+5. **`process_audio_transcode`**: Allocates `var frame = alloc_frame(s0, s1, s2, s3)`, calls `frame.apply_gain(gain)?`, raises `FrameError.SilenceDetected` if `frame.peak_energy() == 0`, and returns `consume_and_archive(own frame)`. Whether returning normally or exiting early via `?` / `raise`, the compiler automatically weaves `jn_box_free(frame)` on all unwind paths, guaranteeing `active_native_boxes() == 0`.
+
+```jenny
+module pcm_frame_pipeline
+
+pub enum FrameError {
+    InvalidGain,
+    SilenceDetected,
+}
+
+pub struct PcmFrame {
+    pub s0: i64,
+    pub s1: i64,
+    pub s2: i64,
+    pub s3: i64,
+    pub sample_rate: i64 = 48000,
+    invariant self.sample_rate > 0
+}
+
+pub fn alloc_frame(s0: i64, s1: i64, s2: i64, s3: i64) -> *PcmFrame
+    ensures active_native_boxes() == old(active_native_boxes()) + 1
+
+impl PcmFrame {
+    pub fn peak_energy(self) -> i64
+        ensures result >= 0
+
+    pub fn apply_gain(mut self, factor: i64) -> void ! FrameError
+        requires factor > 0 && factor <= 10 else FrameError.InvalidGain
+        ensures self.s0 == old(self.s0) * factor
+}
+
+pub fn consume_and_archive(own frame: *PcmFrame) -> i64
+    ensures active_native_boxes() == old(active_native_boxes()) - 1
+
+pub fn process_audio_transcode(s0: i64, s1: i64, s2: i64, s3: i64, gain: i64) -> i64 ! FrameError
+    ensures active_native_boxes() == old(active_native_boxes())
+
+@example("EX-B13-01: unique *PcmFrame borrow, mut gain, and own consumption") {
+    val archived = process_audio_transcode(2, -3, 4, 5, 3)!
+    assert(archived == 24)
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-B13-02: zero memory leak across early ? and raise error exits") {
+    val err_gain = process_audio_transcode(1, 2, 3, 4, 99)
+    assert(err_gain is Err(FrameError.InvalidGain))
+    assert(active_native_boxes() == 0)
+
+    val err_silent = process_audio_transcode(0, 0, 0, 0, 2)
+    assert(err_silent is Err(FrameError.SilenceDetected))
+    assert(active_native_boxes() == 0)
+}
+```

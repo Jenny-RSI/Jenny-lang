@@ -1,0 +1,90 @@
+# B09: E-Commerce Order Lifecycle Finite State Machine (`OrderFsm`)
+
+This module implements an e-commerce order state machine (`OrderStateMachine`) governing the following valid state transitions:
+- `0 (Created)` $\rightarrow$ `1 (Paid)` or `4 (Cancelled)`
+- `1 (Paid)` $\rightarrow$ `2 (Shipped)` or `4 (Cancelled)`
+- `2 (Shipped)` $\rightarrow$ `3 (Delivered)`
+- Terminal states `3 (Delivered)` and `4 (Cancelled)` cannot transition further.
+
+Every valid state transition monotonically increments `version` (`ensures self.version == old(self.version) + 1`).
+
+```jenny
+module order_fsm
+
+pub enum FsmError {
+    InvalidTransition,
+    AlreadyTerminal,
+    InvalidAmount,
+}
+
+pub struct OrderStateMachine {
+    pub order_id: i64,
+    pub state: i32 = 0,
+    pub version: usize = 1,
+    pub paid_cents: i64 = 0,
+
+    invariant {
+        self.state >= 0 && self.state <= 4
+        self.version >= 1
+        self.paid_cents >= 0
+    }
+}
+
+impl OrderStateMachine {
+    pub fn new(order_id: i64) -> OrderStateMachine
+        ensures result.state == 0
+        ensures result.version == 1
+
+    pub fn pay(mut self, amount_cents: i64) -> void ! FsmError
+        requires self.state == 0 else FsmError.InvalidTransition
+        requires amount_cents > 0 else FsmError.InvalidAmount
+        ensures self.state == 1
+        ensures self.version == old(self.version) + 1
+
+    pub fn ship(mut self) -> void ! FsmError
+        requires self.state == 1 else FsmError.InvalidTransition
+        ensures self.state == 2
+        ensures self.version == old(self.version) + 1
+
+    pub fn deliver(mut self) -> void ! FsmError
+        requires self.state == 2 else FsmError.InvalidTransition
+        ensures self.state == 3
+        ensures self.version == old(self.version) + 1
+
+    pub fn cancel(mut self) -> void ! FsmError
+        requires self.state == 0 || self.state == 1 else FsmError.AlreadyTerminal
+        ensures self.state == 4
+        ensures self.version == old(self.version) + 1
+}
+
+@example("EX-B09-01: valid lifecycle Created -> Paid -> Shipped -> Delivered") {
+    var fsm = OrderStateMachine.new(9001)
+    assert(fsm.state == 0)
+
+    fsm.pay(4500)!
+    assert(fsm.state == 1)
+    assert(fsm.version == 2)
+    assert(fsm.paid_cents == 4500)
+
+    fsm.ship()!
+    assert(fsm.state == 2)
+    assert(fsm.version == 3)
+
+    fsm.deliver()!
+    assert(fsm.state == 3)
+    assert(fsm.version == 4)
+}
+
+@example("EX-B09-02: reject illegal backward transition and cancel after ship") {
+    var fsm = OrderStateMachine.new(9002)
+    val ship_early = fsm.ship()
+    assert(ship_early is FsmError.InvalidTransition)
+
+    fsm.pay(3000)!
+    fsm.ship()!
+
+    val cancel_late = fsm.cancel()
+    assert(cancel_late is FsmError.AlreadyTerminal)
+    assert(fsm.state == 2)
+}
+```

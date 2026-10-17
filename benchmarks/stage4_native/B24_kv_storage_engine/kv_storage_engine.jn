@@ -1,0 +1,32 @@
+module kv_storage_engine
+
+impl MemKvBackend {
+    pub fn new() -> MemKvBackend {
+        return MemKvBackend { entry_count: 0, bytes_written: 0 }
+    }
+
+    pub fn write_wal(mut self, seq_id: i64, payload_len: i64) -> i64 ! CodecError {
+        val pkt = WalPacket.new(seq_id, payload_len)
+        val _digest = pkt.encode_digest()?
+        self.entry_count = self.entry_count + 1
+        self.bytes_written = self.bytes_written + pkt.wire_size()
+        return self.bytes_written
+    }
+
+    pub fn total_bytes(self) -> i64 {
+        return self.bytes_written
+    }
+}
+
+impl AuditedKvEngine {
+    pub fn new() -> AuditedKvEngine {
+        val _inner = MemKvBackend.new()
+        return AuditedKvEngine { inner: _inner, audit_calls: 0 }
+    }
+}
+
+pub fn replicate_and_verify_wal(mut engine: AuditedKvEngine, seq_id: i64, payload_len: i64) -> i64 ! CodecError {
+    engine.audit_calls = engine.audit_calls + 1
+    val total = engine.write_wal(seq_id, payload_len)?
+    return total
+}

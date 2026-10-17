@@ -1,0 +1,22 @@
+module audio_normalizer
+
+impl NormalizerState {
+    pub fn new(sample_rate: i32) -> NormalizerState ! AudioError {
+        return NormalizerState {
+            sample_rate: sample_rate,
+            processed_samples: 0,
+            clipped_samples: 0,
+        }
+    }
+
+    pub fn normalize_sample(mut self, sample: i64, gain_num: i64, gain_den: i64) -> i64 ! AudioError {
+        val scaled = (sample * gain_num) / gain_den
+        val is_clipped = scaled > 32767 || scaled < -32768
+        val clip_inc: usize = if is_clipped { 1 } else { 0 }
+        self.processed_samples += 1
+        self.clipped_samples += clip_inc
+        val low_clamp = if scaled < -32768 { -32768 } else { scaled }
+        val final_sample = if low_clamp > 32767 { 32767 } else { low_clamp }
+        return final_sample
+    }
+}

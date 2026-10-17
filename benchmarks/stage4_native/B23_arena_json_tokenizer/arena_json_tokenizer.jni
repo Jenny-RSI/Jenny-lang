@@ -1,0 +1,49 @@
+# B23: Region Arena & Zero-Copy JSON Lexical Scanner (`arena_json_tokenizer`)
+
+This Stage 4 (`Jenny-Native v1.0`) benchmark demonstrates zero-copy `str` scanning and O(1) `*in(arena)` region allocation:
+1. **`scan_json_object(payload: str, mut arena: Arena)`**: Checks `val n = payload.len()`, `guard payload.byte_at(0) == 123 && payload.byte_at(n - 1) == 125 else { raise JsonScanError.UnbalancedBraces }`, counts `colons` (`payload.byte_at(i) == 58`) and `commas` (`payload.byte_at(i) == 44`) across `1..n - 1`, checks `if n > 2 && colons != commas + 1 { raise JsonScanError.MissingColon }`, and returns `return *in(arena) JsonStats { pair_count: colons, colon_count: colons, byte_len: n }`.
+2. **`validate_and_count_keys(payload: str)`**: Allocates `var arena = Arena.new(256)`, calls `val stats = scan_json_object(payload, mut arena)?`, extracts `val count = stats.pair_count`, calls `arena.drop()`, and returns `return count`.
+
+```jenny
+module arena_json_tokenizer
+
+pub enum JsonScanError {
+    EmptyPayload,
+    UnbalancedBraces,
+    MissingColon,
+}
+
+pub struct JsonStats {
+    pub pair_count: i64,
+    pub colon_count: i64,
+    pub byte_len: i64,
+    invariant self.pair_count >= 0
+    invariant self.colon_count >= 0
+    invariant self.byte_len >= 0
+}
+
+pub fn scan_json_object(payload: str, mut arena: Arena) -> *JsonStats ! JsonScanError
+    requires payload.len() >= 2 else JsonScanError.EmptyPayload
+    ensures result.byte_len == payload.len()
+    ensures result.pair_count == result.colon_count
+
+pub fn validate_and_count_keys(payload: str) -> i64 ! JsonScanError
+    requires payload.len() >= 2 else JsonScanError.EmptyPayload
+    ensures result >= 0
+
+@example("EX-B23-01: zero-copy JSON object scanning and O(1) Arena allocation") {
+    val count1 = validate_and_count_keys("{\"id\":101,\"ok\":1,\"ver\":4}")!
+    assert(count1 == 3)
+
+    val count2 = validate_and_count_keys("{}")!
+    assert(count2 == 0)
+}
+
+@example("EX-B23-02: reject unbalanced braces and missing colon separators") {
+    val bad_brace = validate_and_count_keys("{\"id\":101")
+    assert(bad_brace is Err(JsonScanError.UnbalancedBraces))
+
+    val bad_colon = validate_and_count_keys("{\"id\",101}")
+    assert(bad_colon is Err(JsonScanError.MissingColon))
+}
+```
