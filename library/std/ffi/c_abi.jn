@@ -1,0 +1,32 @@
+module std_ffi_c_abi
+
+impl CFrameHeader {
+    pub fn header_byte_len(self) -> i64 {
+        return self.ihl * 4
+    }
+
+    pub fn payload_byte_len(self) -> i64 {
+        return self.total_len - self.ihl * 4
+    }
+}
+
+pub fn union_from_raw(raw_val: u32) -> CWord32Union {
+    return CWord32Union { raw_u32: raw_val }
+}
+
+pub fn union_from_halves(low16: u32, high16: u32) -> CWord32Union ! CAbiError {
+    val h = CHalfWords { low16, high16 }
+    return CWord32Union { halves: h }
+}
+
+pub fn union_low16(u: CWord32Union) -> i64 {
+    return u.halves.low16
+}
+
+pub fn union_high16(u: CWord32Union) -> i64 {
+    return u.halves.high16
+}
+
+pub fn union_as_signed(u: CWord32Union) -> i64 {
+    return u.signed_i32
+}

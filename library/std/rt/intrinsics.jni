@@ -1,0 +1,160 @@
+# `std::rt::intrinsics` — Layer-0 Runtime Intrinsics Blueprint (`jenny_rt.h` White-Box Formal Contract Interface)
+
+In traditional systems programming languages, the compiler and low-level runtime library (such as C's internal `libc` helpers, Rust's `core::intrinsics`, or Go's `runtime` package) typically act as implicit black boxes to upper-layer toolchains or AI Agents: upper-layer standard library code invokes low-level intrinsics directly, yet lacks machine-readable preconditions/postconditions and effect signatures.
+
+In Jenny's **Full-Stack White-Box Contract Architecture**, even the lowest-level C99 runtime header (`compiler/jenny-flow/jenny_rt.h`) must expose a 100% formal `.jni` contract specification through the **`std::rt::intrinsics`** blueprint:
+1. **Complete Transparency to AI Coding Agents**: When `spindle context` bundles context for an upper-layer module (such as `std::mem::raw_buf` or `std::str::fmt`), `std::rt::intrinsics.jni` is automatically included as the root node of the reachable dependency DAG. The AI never needs to guess C runtime function names and can inspect the exact parameter types, effect tags, and boundary contracts of every low-level primitive;
+2. **Compiler-Woven Intrinsic Contract Guards**: All `rt_*` intrinsics automatically weave `requires` and `ensures` assertions when transpiled to C99, ensuring that any invalid pointer, negative offset, or out-of-bounds capacity passed by an upper-layer `.jn` module is intercepted before entering `jenny_rt.h`;
+3. **Package Manager White-Box Boundary Enforcement (`E0510_UNDECLARED_RT_INTRINSIC`)**: `Spindle` mandates that across the entire standard library, only `std::rt::intrinsics` may bind directly to the `jn_raw_*` / `jn_scratch_*` C macros in `jenny_rt.h`. Any other `.jn` module that bypasses `std::rt::intrinsics` to invoke low-level `jn_raw_*` primitives directly or omits `import std::rt::intrinsics` is statically blocked by `spindle audit`.
+
+```jenny
+module std_rt_intrinsics
+
+pub fn rt_raw_alloc(cap: i64) -> i64
+    effects [AllocNative]
+    requires cap >= 0 && cap <= 1048576
+    ensures (cap == 0 && result == 0) || (cap > 0 && result != 0)
+
+pub fn rt_raw_realloc(old_ptr: i64, old_cap: i64, new_cap: i64) -> i64
+    effects [AllocNative, Mutate]
+    requires old_cap >= 0 && new_cap >= 0 && new_cap <= 1048576
+    ensures (new_cap == 0 && result == 0) || (new_cap > 0 && result != 0)
+
+pub fn rt_raw_free(raw_ptr: i64) -> i64
+    effects [Mutate]
+    ensures result == 0
+
+pub fn rt_raw_get(raw_ptr: i64, idx: i64) -> i64
+    effects []
+    requires raw_ptr != 0 && idx >= 0
+
+pub fn rt_raw_set(raw_ptr: i64, idx: i64, val: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && idx >= 0
+    ensures result == val
+
+pub fn rt_raw_copy(dst_ptr: i64, dst_off: i64, src_ptr: i64, src_off: i64, count: i64) -> i64
+    effects [Mutate]
+    requires count >= 0 && dst_off >= 0 && src_off >= 0
+    ensures result == count
+
+pub fn rt_scratch_mark() -> i64
+    effects []
+    ensures result >= 0
+
+pub fn rt_scratch_alloc(cap: i64) -> i64
+    effects []
+    requires cap >= 0 && cap <= 16384
+    ensures (cap == 0 && result == 0) || (cap > 0 && result != 0)
+
+pub fn rt_scratch_release(mark: i64) -> i64
+    effects [Mutate]
+    requires mark >= 0
+    ensures result == 0
+
+pub fn rt_raw_put_str(raw_ptr: i64, write_off: i64, s: str) -> i64
+    effects [Mutate]
+    requires write_off >= 0
+    ensures result == write_off + s.len()
+
+pub fn rt_raw_put_string(raw_ptr: i64, write_off: i64, s: String) -> i64
+    effects [Mutate]
+    requires write_off >= 0
+    ensures result == write_off + s.len()
+
+pub fn rt_raw_put_i64(raw_ptr: i64, write_off: i64, val: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0
+    ensures result > write_off && result <= write_off + 21
+
+pub fn rt_raw_put_hex_u32(raw_ptr: i64, write_off: i64, val: i64, digits: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0 && digits >= 1 && digits <= 8
+    ensures result == write_off + digits
+
+pub fn rt_raw_put_hex_upper_u32(raw_ptr: i64, write_off: i64, val: i64, digits: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0 && digits >= 1 && digits <= 8
+    ensures result == write_off + digits
+
+pub fn rt_raw_put_pad_zero(raw_ptr: i64, write_off: i64, val: i64, width: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0 && width >= 1 && width <= 20
+    ensures result >= write_off + width
+
+pub fn rt_raw_put_bin_u32(raw_ptr: i64, write_off: i64, val: i64, bits: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0 && bits >= 1 && bits <= 32
+    ensures result == write_off + bits
+
+pub fn rt_raw_put_grouped_i64(raw_ptr: i64, write_off: i64, val: i64, sep_byte: i64) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0 && sep_byte >= 0 && sep_byte <= 127
+    ensures result > write_off && result <= write_off + 27
+
+pub fn rt_raw_put_bool(raw_ptr: i64, write_off: i64, flag: bool) -> i64
+    effects [Mutate]
+    requires raw_ptr != 0 && write_off >= 0
+    ensures (flag && result == write_off + 4) || (!flag && result == write_off + 5)
+
+pub fn rt_raw_eq_str(raw_ptr: i64, len: i64, target: str) -> bool
+    effects []
+    requires len >= 0
+    ensures !result || len == target.len()
+
+pub fn rt_raw_to_sso_string(raw_ptr: i64, start: i64, len: i64) -> String
+    effects []
+    requires start >= 0 && len >= 0
+    ensures result.len() == len
+    ensures (len <= 22 && result.is_sso()) || (len > 22 && !result.is_sso())
+
+pub fn rt_gc_begin_mark() -> i64
+    effects [Mutate]
+    ensures result == 0
+
+pub fn rt_gc_sweep_epoch() -> i64
+    effects [Mutate]
+    ensures result >= 0
+
+@example("EX-STD-RT-01: raw heap intrinsics alloc, set, get, copy, realloc, and leak-free release") {
+    val p1 = rt_raw_alloc(4)
+    assert(p1 != 0)
+    assert(active_native_boxes() == 1)
+
+    val _ = rt_raw_set(p1, 0, 101)
+    val _ = rt_raw_set(p1, 1, 202)
+    assert(rt_raw_get(p1, 0) == 101)
+    assert(rt_raw_get(p1, 1) == 202)
+
+    val _ = rt_raw_copy(p1, 2, p1, 0, 2)
+    assert(rt_raw_get(p1, 2) == 101)
+    assert(rt_raw_get(p1, 3) == 202)
+
+    val p2 = rt_raw_realloc(p1, 4, 8)
+    assert(p2 != 0)
+    assert(rt_raw_get(p2, 3) == 202)
+
+    val _ = rt_raw_free(p2)
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-RT-02: scratch arena and SSO string formatting intrinsics with zero heap allocation") {
+    val mark = rt_scratch_mark()
+    val sp = rt_scratch_alloc(32)
+    assert(sp != 0)
+    assert(active_native_boxes() == 0)
+
+    var off = rt_raw_put_str(sp, 0, "rt=")
+    off = rt_raw_put_i64(sp, off, 42)
+    off = rt_raw_put_str(sp, off, ",hex=")
+    off = rt_raw_put_hex_u32(sp, off, 255, 2)
+    assert(rt_raw_eq_str(sp, off, "rt=42,hex=ff"))
+
+    val s = rt_raw_to_sso_string(sp, 0, off)
+    assert(s.is_sso())
+    assert(s.eq_str("rt=42,hex=ff"))
+
+    val _ = rt_scratch_release(mark)
+    assert(active_native_boxes() == 0)
+}
+```

@@ -1,0 +1,49 @@
+# Package Blueprint: `std` — Spinning Jenny Standard Library (`v0.2-alpha2`)
+
+## 1. Architectural Intent & Design Philosophy
+
+The `std` package provides the 7 foundational standard library clusters for the **Spinning Jenny** programming language (`15` modules), benchmarked directly against Rust's `core`, `alloc`, and `std` crates without `unsafe` lifetime/drop-check ceremony:
+
+0. **`std::rt` & `std::ffi` (Layer-0 White-Box Runtime Intrinsics & C ABI Bridge Blueprints)**:
+   * `std::rt::intrinsics` (`rt_raw_*`, `rt_scratch_*`, `rt_gc_*`): Formal `.jni` blueprint wrapping `jenny_rt.h` so every low-level heap, scratch-arena, SSO string, formatting, and Immix GC primitive carries machine-verifiable `requires`, `ensures`, and `effects` signatures.
+   * `std::ffi::c_abi` (`CFrameHeader`, `CHalfWords`, `CWord32Union`, `@extern_c`): White-box C library `.jni` blueprint generated from `std/ffi/c_frame_abi.h` via `spindle bindgen-c`, supporting 1:1 C ABI `@repr(C) struct` bitfields (`@bits(N)`), `@repr(C) union` memory overlays, and contracted `@extern_c` bindings without black-box `import c "header.h"`.
+1. **`std::mem` (Tri-Path Memory Foundations)**:
+   * `std::mem::raw_buf` (`RawBuf`): Deterministic native heap contiguous buffer (`*T` backing store) with geometric $2\times$ reallocation (`grow`), zero-leak drop tracking, and formal bounds contracts.
+   * `std::mem::arena` (`BumpArena` & `ImmixNode`): High-throughput $O(1)$ regional bump-pointer arena (`*in(arena) T`) with watermark/checkpoint rollback, paired with `^T` 64KB Block + 128B Line Immix Mark-Region pool nodes.
+2. **`std::collections` (Contract-Verified Containers)**:
+   * `std::collections::vec` (`Vec`): Dynamic contiguous array built on `std::mem::raw_buf::RawBuf` with automatic $2\times$ geometric growth, `push`, `pop`, `get`, `set`, `insert_at`, `remove_at`, `clear`, and deterministic `drop_vec`.
+   * `std::collections::vec_deque` (`VecDeque`): Circular double-ended ring buffer built on `std::mem::raw_buf::RawBuf` supporting $O(1)$ amortized `push_front`, `push_back`, `pop_front`, `pop_back`, and wrap-around physical index translation upon $2\times$ resize.
+   * `std::collections::hash_map` (`HashMap`): Open-addressing hash table built on `std::mem::raw_buf::RawBuf` with load-factor invariant ($\text{len} \times 4 \le \text{cap} \times 3$), automatic rehash/grow, tombstone-safe deletion, and $O(1)$ lookup.
+   * `std::collections::lru_cache` (`LruCache`): Bounded-capacity doubly-linked cyclic LRU cache built on `std::mem::raw_buf::RawBuf` cursor links, eliminating Rust's `NonNull<Node>` + `unsafe` aliasing hazards.
+3. **`std::str` (Zero-Copy String Slices, 24-Byte SSO Strings & `@spin` Variadic Formatter)**:
+   * `std::str::str_view` (`StrSliceView`): Zero-copy sub-slice window (`start + len <= source_cap`) with `advance`, `truncate_len`, `sub_slice`, and zero-copy `slice_str(raw: str) -> str ! StrError`.
+   * `std::str::string_buf` (`StringBuf`): Dynamic growable ASCII/UTF-8 string builder built on `RawBuf` with `push_byte`, `push_repeat`, `push_str`, `equals_str`, `to_sso_string() -> String`, `truncate`, and `fnv1a_hash`.
+   * `std::str::fmt` (`str::format`, `FmtSpec`, `Culture`, `FmtBuffer`): AI-native `@spin` variadic template formatting (`str::format(...args) -> String`), tuple format descriptors `(arg, FmtSpec, ...params)`, and `Arena`-backed `FmtBuffer.in_arena(cap)`.
+4. **`std::io` (Seekable Cursors, Buffered Streams & Normalized Paths)**:
+   * `std::io::cursor` (`IoCursor`): In-memory seekable stream cursor (`0 <= pos <= filled <= buf.cap`) with `write_word`, `read_word`, `seek_to`, and `rewind`.
+   * `std::io::buf_io` (`BufChannel`): Buffered stream reader/writer (`0 <= read_pos <= write_pos <= buf.cap`) with `write_frame`, `read_frame`, `compact` shift, and `flush_all`.
+   * `std::io::path_buf` (`PathBuf`): Normalized path component stack built on `RawBuf` that statically blocks root traversal escape (`..` on empty depth).
+5. **`std::codec` (Streaming Binary Codecs)**:
+   * `std::codec::varint` (`VarintStream`): LEB128 variable-length integer & ZigZag signed integer streaming encoder/decoder built on `RawBuf`.
+
+## 2. Package Capability & Export Surface
+
+```jenny
+package std
+
+export module std::rt::intrinsics
+export module std::ffi::c_abi
+export module std::mem::raw_buf
+export module std::mem::arena
+export module std::collections::vec
+export module std::collections::vec_deque
+export module std::collections::hash_map
+export module std::collections::lru_cache
+export module std::str::str_view
+export module std::str::string_buf
+export module std::str::fmt
+export module std::io::cursor
+export module std::io::buf_io
+export module std::io::path_buf
+export module std::codec::varint
+```

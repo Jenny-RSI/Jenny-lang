@@ -1,0 +1,187 @@
+{
+  "lock_version": "2.0",
+  "package": "std",
+  "version": "0.2.0-alpha2",
+  "allow_effects": [],
+  "package_jni_abi_merkle_root": "811b37af784a67ff",
+  "package_jn_impl_merkle_root": "92226011a594657e",
+  "module_count": 15,
+  "modules": {
+    "std::rt::intrinsics": {
+      "jni": "rt/intrinsics.jni",
+      "jn": "rt/intrinsics.jn",
+      "jni_abi_hash": "cebd343507788bfd",
+      "jn_impl_hash": "789a862ee44b13f2",
+      "imports": [],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::ffi::c_abi": {
+      "jni": "ffi/c_abi.jni",
+      "jn": "ffi/c_abi.jn",
+      "jni_abi_hash": "1b5ca51f3767ceda",
+      "jn_impl_hash": "ae85364fe1d279b7",
+      "imports": [],
+      "effects": [
+        "FFI"
+      ]
+    },
+    "std::mem::raw_buf": {
+      "jni": "mem/raw_buf.jni",
+      "jn": "mem/raw_buf.jn",
+      "jni_abi_hash": "68b05d4c3b59fc32",
+      "jn_impl_hash": "76878a645001223b",
+      "imports": [
+        "std::rt::intrinsics"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::mem::arena": {
+      "jni": "mem/arena.jni",
+      "jn": "mem/arena.jn",
+      "jni_abi_hash": "1f51bb1d34c7e479",
+      "jn_impl_hash": "2b423ab465858e09",
+      "imports": [
+        "std::rt::intrinsics"
+      ],
+      "effects": [
+        "AllocGC",
+        "AllocRegion"
+      ]
+    },
+    "std::collections::vec": {
+      "jni": "collections/vec.jni",
+      "jn": "collections/vec.jn",
+      "jni_abi_hash": "9d54c170cb11816a",
+      "jn_impl_hash": "8c4ecc775dfd556d",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::collections::vec_deque": {
+      "jni": "collections/vec_deque.jni",
+      "jn": "collections/vec_deque.jn",
+      "jni_abi_hash": "4ba4813bcac3b0b3",
+      "jn_impl_hash": "a65a914c18fc2f72",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::collections::hash_map": {
+      "jni": "collections/hash_map.jni",
+      "jn": "collections/hash_map.jn",
+      "jni_abi_hash": "07a420b6409f02e0",
+      "jn_impl_hash": "9c851f12f98c53c2",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::collections::lru_cache": {
+      "jni": "collections/lru_cache.jni",
+      "jn": "collections/lru_cache.jn",
+      "jni_abi_hash": "8c311f00046fbf44",
+      "jn_impl_hash": "8d8550415ff1b234",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::str::str_view": {
+      "jni": "str/str_view.jni",
+      "jn": "str/str_view.jn",
+      "jni_abi_hash": "f2888949a79aed0a",
+      "jn_impl_hash": "736a378542c36297",
+      "imports": [],
+      "effects": []
+    },
+    "std::str::string_buf": {
+      "jni": "str/string_buf.jni",
+      "jn": "str/string_buf.jn",
+      "jni_abi_hash": "e84ed854afa11cd8",
+      "jn_impl_hash": "f00f4f0c3284b117",
+      "imports": [
+        "std::rt::intrinsics",
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocGC",
+        "AllocNative"
+      ]
+    },
+    "std::str::fmt": {
+      "jni": "str/fmt.jni",
+      "jn": "str/fmt.jn",
+      "jni_abi_hash": "3caebb62712cf994",
+      "jn_impl_hash": "7917bda7c0879d19",
+      "imports": [
+        "std::rt::intrinsics",
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::io::cursor": {
+      "jni": "io/cursor.jni",
+      "jn": "io/cursor.jn",
+      "jni_abi_hash": "70627bbdea523a2a",
+      "jn_impl_hash": "c5eed3d3a97ad252",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::io::buf_io": {
+      "jni": "io/buf_io.jni",
+      "jn": "io/buf_io.jn",
+      "jni_abi_hash": "70ea6d63475437d3",
+      "jn_impl_hash": "9531392b74fd2feb",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::io::path_buf": {
+      "jni": "io/path_buf.jni",
+      "jn": "io/path_buf.jn",
+      "jni_abi_hash": "4ca2926f62006e2c",
+      "jn_impl_hash": "3e18ee478335ce95",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    },
+    "std::codec::varint": {
+      "jni": "codec/varint.jni",
+      "jn": "codec/varint.jn",
+      "jni_abi_hash": "ebafecdb951cc11e",
+      "jn_impl_hash": "2b187bff1c17529e",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "effects": [
+        "AllocNative"
+      ]
+    }
+  }
+}

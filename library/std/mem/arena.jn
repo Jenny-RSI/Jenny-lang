@@ -1,0 +1,48 @@
+module std_mem_arena
+
+import std::rt::intrinsics
+
+impl BumpArena {
+    pub fn new(capacity: i64) -> BumpArena ! ArenaError {
+        return BumpArena { capacity: capacity, used: 0, allocs: 0, peak_used: 0 }
+    }
+
+    pub fn alloc_aligned(mut self, size_bytes: i64) -> i64 ! ArenaError {
+        val rem = size_bytes % 8
+        val aligned = if rem == 0 { size_bytes } else { size_bytes + (8 - rem) }
+        guard self.used + aligned <= self.capacity else { raise ArenaError.OutOfMemory }
+        val offset = self.used
+        self.used += aligned
+        self.allocs += 1
+        if self.used > self.peak_used {
+            self.peak_used = self.used
+        }
+        return offset
+    }
+
+    pub fn checkpoint(self) -> i64 {
+        return self.used
+    }
+
+    pub fn rollback(mut self, watermark: i64) -> i64 ! ArenaError {
+        self.used = watermark
+        return self.used
+    }
+
+    pub fn reset(mut self) -> i64 {
+        self.used = 0
+        self.allocs = 0
+        return self.peak_used
+    }
+}
+
+pub fn immix_spawn_node(id: i64, payload: i64, next: ^ImmixNode?) -> ^ImmixNode {
+    return ^ImmixNode { id: id, payload: payload, next: next }
+}
+
+pub fn immix_collect_keep_two(r1: ^ImmixNode, r2: ^ImmixNode) -> i64 {
+    val _ = rt_gc_begin_mark()
+    jn_gc_mark_ptr(r1)
+    jn_gc_mark_ptr(r2)
+    return rt_gc_sweep_epoch()
+}

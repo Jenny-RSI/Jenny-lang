@@ -1,0 +1,94 @@
+module std_collections_vec
+
+import std::mem::raw_buf
+
+impl Vec {
+    pub fn new() -> Vec {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return Vec { buf: b, len: 0 }
+    }
+
+    pub fn with_capacity(cap: i64) -> Vec ! VecError {
+        val b = RawBuf.new(cap)?
+        return Vec { buf: b, len: 0 }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.buf.cap
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.len == 0
+    }
+
+    pub fn reserve(mut self, additional: i64) -> i64 ! VecError {
+        val needed = self.len + additional
+        if needed > self.buf.cap {
+            self.buf.grow(needed)?
+        }
+        return self.buf.cap
+    }
+
+    pub fn push(mut self, val: i64) -> i64 ! VecError {
+        if self.len == self.buf.cap {
+            self.buf.grow(self.len + 1)?
+        }
+        self.buf.write_at(self.len, val)?
+        self.len += 1
+        return self.len
+    }
+
+    pub fn pop(mut self) -> i64 ! VecError {
+        self.len -= 1
+        val item = self.buf.read_at(self.len)?
+        return item
+    }
+
+    pub fn get(self, idx: i64) -> i64 ! VecError {
+        val item = self.buf.read_at(idx)?
+        return item
+    }
+
+    pub fn set(mut self, idx: i64, val: i64) -> i64 ! VecError {
+        self.buf.write_at(idx, val)?
+        return val
+    }
+
+    pub fn insert_at(mut self, idx: i64, val: i64) -> i64 ! VecError {
+        if self.len == self.buf.cap {
+            self.buf.grow(self.len + 1)?
+        }
+        val tail_count = self.len - idx
+        if tail_count > 0 {
+            self.buf.copy_within(idx, idx + 1, tail_count)?
+        }
+        self.buf.write_at(idx, val)?
+        self.len += 1
+        return self.len
+    }
+
+    pub fn remove_at(mut self, idx: i64) -> i64 ! VecError {
+        val removed = self.buf.read_at(idx)?
+        val tail_count = self.len - idx - 1
+        if tail_count > 0 {
+            self.buf.copy_within(idx + 1, idx, tail_count)?
+        }
+        self.len -= 1
+        return removed
+    }
+
+    pub fn clear(mut self) -> i64 {
+        self.len = 0
+        return 0
+    }
+
+    pub fn drop_vec(mut self) -> i64 {
+        self.buf.release()
+        self.len = 0
+        return 0
+    }
+}

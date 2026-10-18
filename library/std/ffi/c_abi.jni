@@ -1,0 +1,138 @@
+# `std::ffi::c_abi` — White-Box C Library `.jni` Blueprint Bridging & 1:1 Memory Layout (`@repr(C)` `struct` / `union` / `@bits(N)` Bitfields)
+
+In the Jenny ecosystem, business modules are forbidden from directly writing `import c "header.h"` to include un-auditable black-box C headers. All external C libraries must first be extracted into white-box `.jni` blueprints via AI + `spindle bindgen-c`:
+1. **1:1 C ABI Structs and Bitfields (`@repr(C) struct` + `@bits(N)`)**: Supports bit-exact C99 bitfield packing (such as network frame headers `4+4+6+2+16 = 32` bits) and automatically weaves bit-width range invariants;
+2. **1:1 C ABI Unions (`@repr(C) union`)**: Supports zero-copy union views with shared memory layouts (such as overlapping access between a 32-bit word and a pair of 16-bit half-words);
+3. **White-Box `@extern_c` Contract Bindings**: Binds C library symbols as `.jni` functions equipped with `requires` / `ensures` / `effects` contracts, enabling unified intent auditing and SemVer fingerprint calculation by `Spindle`.
+
+```jenny
+module std_ffi_c_abi
+
+pub enum CAbiError {
+    InvalidVersion,
+    InvalidHeaderLen,
+    PayloadUnderflow,
+    BitfieldOverflow,
+}
+
+@repr(C)
+pub struct CFrameHeader {
+    pub version: u32 @bits(4) = 4
+    pub ihl: u32 @bits(4) = 5
+    pub dscp: u32 @bits(6) = 0
+    pub ecn: u32 @bits(2) = 0
+    pub total_len: u32 @bits(16) = 20
+    pub seq_id: u32 = 0
+
+    invariant self.version >= 4 && self.version <= 15
+    invariant self.ihl >= 5 && self.ihl <= 15
+    invariant self.dscp >= 0 && self.dscp <= 63
+    invariant self.ecn >= 0 && self.ecn <= 3
+    invariant self.total_len >= 20 && self.total_len <= 65535
+    invariant self.total_len >= self.ihl * 4
+}
+
+@repr(C)
+pub struct CHalfWords {
+    pub low16: u32 @bits(16) = 0
+    pub high16: u32 @bits(16) = 0
+
+    invariant self.low16 >= 0 && self.low16 <= 65535
+    invariant self.high16 >= 0 && self.high16 <= 65535
+}
+
+@repr(C)
+pub union CWord32Union {
+    pub raw_u32: u32
+    pub halves: CHalfWords
+    pub signed_i32: i32
+}
+
+impl CFrameHeader {
+    pub fn new(version: u32, ihl: u32, dscp: u32, ecn: u32, total_len: u32, seq_id: u32) -> CFrameHeader ! CAbiError
+        requires version >= 4 && version <= 15 else CAbiError.InvalidVersion
+        requires ihl >= 5 && ihl <= 15 else CAbiError.InvalidHeaderLen
+        requires dscp >= 0 && dscp <= 63 else CAbiError.BitfieldOverflow
+        requires ecn >= 0 && ecn <= 3 else CAbiError.BitfieldOverflow
+        requires total_len >= 20 && total_len <= 65535 else CAbiError.BitfieldOverflow
+        requires total_len >= ihl * 4 else CAbiError.PayloadUnderflow
+        ensures result.version == version && result.ihl == ihl
+        ensures result.dscp == dscp && result.ecn == ecn
+        ensures result.total_len == total_len && result.seq_id == seq_id
+
+    pub fn header_byte_len(self) -> i64
+        ensures result == self.ihl * 4 && result >= 20 && result <= 60
+
+    pub fn payload_byte_len(self) -> i64
+        ensures result == self.total_len - self.ihl * 4 && result >= 0
+}
+
+pub fn union_from_raw(raw_val: u32) -> CWord32Union
+    ensures result.raw_u32 == raw_val
+
+pub fn union_from_halves(low16: u32, high16: u32) -> CWord32Union ! CAbiError
+    requires low16 >= 0 && low16 <= 65535 else CAbiError.BitfieldOverflow
+    requires high16 >= 0 && high16 <= 65535 else CAbiError.BitfieldOverflow
+    ensures result.halves.low16 == low16 && result.halves.high16 == high16
+
+pub fn union_low16(u: CWord32Union) -> i64
+    ensures result >= 0 && result <= 65535
+
+pub fn union_high16(u: CWord32Union) -> i64
+    ensures result >= 0 && result <= 65535
+
+pub fn union_as_signed(u: CWord32Union) -> i64
+
+@extern_c("jenny_c_sizeof_frame")
+pub fn c_sizeof_frame(hdr: CFrameHeader) -> i64
+    ensures result == 8
+
+@extern_c("jenny_c_sizeof_union")
+pub fn c_sizeof_union(u: CWord32Union) -> i64
+    ensures result == 4
+
+@extern_c("jenny_c_frame_word0")
+pub fn c_frame_word0(hdr: CFrameHeader) -> i64
+    ensures result >= 0
+
+@extern_c("jenny_c_abi_bswap32")
+pub fn c_bswap32(x: u32) -> i64
+    ensures result >= 0
+
+@extern_c("jenny_c_abi_adler32_words")
+pub fn c_adler32_words(raw_ptr: i64, count: i64) -> i64
+    requires raw_ptr > 0
+    requires count >= 0
+    effects [FFI]
+    ensures result > 0
+
+@example("1:1 C ABI bitfield struct layout (8 bytes) and union overlay (4 bytes)") {
+    val hdr = CFrameHeader.new(4, 5, 0, 0, 84, 7)!
+    assert(c_sizeof_frame(hdr) == 8)
+    assert(hdr.header_byte_len() == 20)
+    assert(hdr.payload_byte_len() == 64)
+    val w0 = c_frame_word0(hdr)
+    assert(w0 > 0)
+
+    val u1 = union_from_halves(513, 1027)!
+    assert(c_sizeof_union(u1) == 4)
+    assert(union_low16(u1) == 513)
+    assert(union_high16(u1) == 1027)
+
+    val u2 = union_from_raw(305419896)
+    assert(c_bswap32(u2.raw_u32) == 2018915346)
+    val neg_u = union_from_raw(4294967295)
+    assert(union_as_signed(neg_u) == -1)
+}
+
+@example("Bitfield range contract enforcement on C ABI structs and unions") {
+    val bad_ver = CFrameHeader.new(3, 5, 0, 0, 40, 1)
+    assert(bad_ver is Err(CAbiError.InvalidVersion))
+    val bad_dscp = CFrameHeader.new(4, 5, 99, 0, 40, 1)
+    assert(bad_dscp is Err(CAbiError.BitfieldOverflow))
+    val bad_len = CFrameHeader.new(4, 8, 0, 0, 24, 1)
+    assert(bad_len is Err(CAbiError.PayloadUnderflow))
+    val bad_half = union_from_halves(70000, 1)
+    assert(bad_half is Err(CAbiError.BitfieldOverflow))
+}
+```

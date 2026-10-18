@@ -1,0 +1,44 @@
+{
+  "description": "White-box built-in type & runtime introspection C99 symbol dispatch table (backed by jenny_rt.h and std::rt::intrinsics)",
+  "global_functions": {
+    "trace_depth()": "jn_last_trace_depth()",
+    "active_native_boxes()": "jn_active_native_boxes()",
+    "total_native_allocs()": "jn_total_native_allocs()",
+    "active_gc_handles()": "jn_active_gc_handles()",
+    "gc_collect_all()": "jn_gc_collect_all()"
+  },
+  "static_constructors": {
+    "Arena.new": "Arena_new",
+    "String.from_str": "JnString_from_str",
+    "String.from_static": "JnString_from_static"
+  },
+  "arena_methods": [
+    "alloc_count",
+    "used_bytes",
+    "reset",
+    "drop"
+  ],
+  "primitive_type_methods": {
+    "str": {
+      "len": "jn_str_len",
+      "byte_at": "jn_str_byte_at",
+      "eq_str": "jn_str_eq",
+      "sub_str": "jn_str_sub",
+      "as_raw_ptr": "jn_str_as_raw_ptr"
+    },
+    "String": {
+      "len": "jn_string_len",
+      "byte_at": "jn_string_byte_at",
+      "is_sso": "jn_string_is_sso",
+      "eq_str": "jn_string_eq_str",
+      "to_str": "jn_string_as_str"
+    },
+    "bool": {
+      "to_str": "jn_bool_to_str"
+    }
+  },
+  "scalar_trait_forwards": {
+    "fmt_into": "FmtBuffer_put_i64",
+    "fmt_spec_into": "FmtBuffer_put_spec"
+  }
+}

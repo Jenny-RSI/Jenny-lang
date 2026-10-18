@@ -1,0 +1,97 @@
+# `std::io::cursor` — In-Memory Seekable Stream Cursor (`IoCursor`)
+
+## 1. Architectural Intent & Rust `std::io::Cursor` Comparison
+In Rust (`std::io::Cursor<Vec<u8>>`), `Seek` and `Read` traits permit seeking beyond the end of the underlying buffer (`pos > filled`), causing subtle silent zero-read bugs unless callers manually validate `pos <= len`.
+
+In Jenny's `std::io::cursor`, `IoCursor` is backed by `std::mem::raw_buf::RawBuf` and enforces the structural invariant `self.pos >= 0 && self.pos <= self.filled && self.filled <= self.buf.cap` at every method boundary.
+
+```jenny
+module std_io_cursor
+
+import std::mem::raw_buf
+
+pub enum CursorError {
+    UnexpectedEof,
+    InvalidSeek,
+    CapacityOverflow,
+}
+
+pub struct IoCursor {
+    buf: RawBuf,
+    pos: i64 = 0,
+    filled: i64 = 0,
+
+    invariant self.pos >= 0 && self.pos <= self.filled && self.filled <= self.buf.cap
+}
+
+impl IoCursor {
+    pub fn new() -> IoCursor
+        effects []
+        ensures result.pos == 0 && result.filled == 0 && result.buf.cap == 0
+
+    pub fn with_capacity(cap: i64) -> IoCursor ! CursorError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else CursorError.CapacityOverflow
+        ensures result.pos == 0 && result.filled == 0 && result.buf.cap == cap
+
+    pub fn remaining(self) -> i64
+        effects []
+        ensures result == self.filled - self.pos && result >= 0
+
+    pub fn write_word(mut self, val: i64) -> i64 ! CursorError
+        effects [Mutate, AllocNative]
+        requires self.pos < 1048576 else CursorError.CapacityOverflow
+        ensures self.pos == old(self.pos) + 1 && self.filled >= self.pos && result == self.pos
+
+    pub fn read_word(mut self) -> i64 ! CursorError
+        effects [Mutate]
+        requires self.pos < self.filled else CursorError.UnexpectedEof
+        ensures self.pos == old(self.pos) + 1
+
+    pub fn seek_to(mut self, target_pos: i64) -> i64 ! CursorError
+        effects [Mutate]
+        requires target_pos >= 0 && target_pos <= self.filled else CursorError.InvalidSeek
+        ensures self.pos == target_pos && result == target_pos
+
+    pub fn rewind(mut self) -> i64
+        effects [Mutate]
+        ensures self.pos == 0 && self.filled == old(self.filled) && result == 0
+
+    pub fn drop_cursor(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.pos == 0 && self.filled == 0 && self.buf.cap == 0 && result == 0
+}
+
+@example("EX-STD-CURSOR-01: IoCursor write_word, rewind, seek_to, read_word, and drop") {
+    var cur = IoCursor.new()
+    cur.write_word(111)!
+    cur.write_word(222)!
+    cur.write_word(333)!
+    assert(cur.remaining() == 0)
+    cur.rewind()
+    assert(cur.remaining() == 3)
+    assert(cur.read_word()! == 111)
+    cur.seek_to(2)!
+    assert(cur.read_word()! == 333)
+    cur.seek_to(1)!
+    cur.write_word(999)!
+    assert(cur.filled == 3)
+    cur.drop_cursor()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-CURSOR-02: IoCursor rejects read at EOF and out-of-range seek") {
+    var cur = IoCursor.with_capacity(4)!
+    val e1 = cur.read_word()
+    assert(e1 is Err(CursorError.UnexpectedEof))
+    cur.write_word(42)!
+    val e2 = cur.read_word()
+    assert(e2 is Err(CursorError.UnexpectedEof))
+    val e3 = cur.seek_to(2)
+    assert(e3 is Err(CursorError.InvalidSeek))
+    val e4 = cur.seek_to(-1)
+    assert(e4 is Err(CursorError.InvalidSeek))
+    cur.drop_cursor()
+    assert(active_native_boxes() == 0)
+}
+```

@@ -1,0 +1,129 @@
+# `std::str::string_buf` — Dynamic Growable String Builder & 24-Byte SSO `String` Freeze (`StringBuf`)
+
+## 1. Architectural Intent & Rust `alloc::string::String` Comparison
+Rust's `alloc::string::String` wraps a `Vec<u8>` on the heap (always heap-allocating even for 2-byte strings) and moves ownership on every pass-by-value call.
+
+In Jenny's `std::str::string_buf`, `StringBuf` is the mutable buffer counterpart to Jenny's native `str` (16B borrowed slice) and `String` (24B SSO immutable value string). Built atop `std::mem::raw_buf::RawBuf`, `StringBuf` supports `push_str(s: str)`, `push_byte`, `push_repeat`, `equals_str(target: str)`, and `.to_sso_string() -> String` (which packs strings $\le 22$ bytes directly into a 24-byte stack-inline SSO `String` with 0 heap allocations, or freezes longer strings onto the Immix shared heap).
+
+```jenny
+module std_str_string_buf
+
+import std::rt::intrinsics
+import std::mem::raw_buf
+
+pub enum StringError {
+    InvalidAsciiByte,
+    IndexOutOfBounds,
+    CapacityOverflow,
+}
+
+pub struct StringBuf {
+    buf: RawBuf,
+    len: i64 = 0,
+
+    invariant self.len >= 0 && self.len <= self.buf.cap
+}
+
+impl StringBuf {
+    pub fn new() -> StringBuf
+        effects []
+        ensures result.len == 0 && result.buf.cap == 0
+
+    pub fn with_capacity(cap: i64) -> StringBuf ! StringError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else StringError.CapacityOverflow
+        ensures result.len == 0 && result.buf.cap == cap
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len && result >= 0
+
+    pub fn capacity(self) -> i64
+        effects []
+        ensures result == self.buf.cap && result >= self.len
+
+    pub fn push_byte(mut self, ch: i64) -> i64 ! StringError
+        effects [Mutate, AllocNative]
+        requires ch >= 0 && ch <= 127 else StringError.InvalidAsciiByte
+        requires self.len < 1048576 else StringError.CapacityOverflow
+        ensures self.len == old(self.len) + 1 && result == self.len
+
+    pub fn push_str(mut self, s: str) -> i64 ! StringError
+        effects [Mutate, AllocNative]
+        requires self.len + s.len() <= 1048576 else StringError.CapacityOverflow
+        ensures self.len == old(self.len) + s.len() && result == self.len
+
+    pub fn push_repeat(mut self, ch: i64, count: i64) -> i64 ! StringError
+        effects [Mutate, AllocNative]
+        requires ch >= 0 && ch <= 127 else StringError.InvalidAsciiByte
+        requires count >= 0 && self.len + count <= 1048576 else StringError.CapacityOverflow
+        ensures self.len == old(self.len) + count && result == self.len
+
+    pub fn byte_at(self, idx: i64) -> i64 ! StringError
+        effects []
+        requires idx >= 0 && idx < self.len else StringError.IndexOutOfBounds
+        ensures result >= 0 && result <= 127
+
+    pub fn truncate(mut self, new_len: i64) -> i64 ! StringError
+        effects [Mutate]
+        requires new_len >= 0 && new_len <= self.len else StringError.IndexOutOfBounds
+        ensures self.len == new_len && result == new_len
+
+    pub fn equals_str(self, target: str) -> bool
+        effects []
+
+    pub fn to_sso_string(self) -> String
+        effects [AllocGC]
+        ensures result.len() == self.len
+
+    pub fn fnv1a_hash(self) -> i64
+        effects []
+        ensures result >= 0
+
+    pub fn drop_string(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.len == 0 && self.buf.cap == 0 && result == 0
+}
+
+@example("EX-STD-STRBUF-01: StringBuf push_str, push_repeat, 24-byte SSO String freeze, FNV-1a hash, and drop") {
+    var sb = StringBuf.new()
+    assert(sb.len() == 0)
+    assert(sb.capacity() == 0)
+    sb.push_byte(74)!
+    sb.push_byte(78)!
+    sb.push_repeat(33, 3)!
+    assert(sb.len() == 5)
+    assert(sb.capacity() == 8)
+    assert(sb.byte_at(0)! == 74)
+    assert(sb.byte_at(4)! == 33)
+    sb.push_str("-v0.2")!
+    assert(sb.len() == 10)
+    assert(sb.equals_str("JN!!!-v0.2"))
+    val sso_str = sb.to_sso_string()
+    assert(sso_str.is_sso())
+    assert(sso_str.len() == 10)
+    assert(sso_str.eq_str("JN!!!-v0.2"))
+    val h1 = sb.fnv1a_hash()
+    assert(h1 > 0)
+    sb.truncate(2)!
+    assert(sb.len() == 2)
+    assert(sb.equals_str("JN"))
+    sb.drop_string()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-STRBUF-02: StringBuf rejects non-ASCII bytes and out-of-bounds access") {
+    var sb = StringBuf.with_capacity(4)!
+    val e1 = sb.push_byte(200)
+    assert(e1 is Err(StringError.InvalidAsciiByte))
+    val e2 = sb.push_byte(-5)
+    assert(e2 is Err(StringError.InvalidAsciiByte))
+    sb.push_byte(65)!
+    val e3 = sb.byte_at(1)
+    assert(e3 is Err(StringError.IndexOutOfBounds))
+    val e4 = sb.truncate(5)
+    assert(e4 is Err(StringError.IndexOutOfBounds))
+    sb.drop_string()
+    assert(active_native_boxes() == 0)
+}
+```

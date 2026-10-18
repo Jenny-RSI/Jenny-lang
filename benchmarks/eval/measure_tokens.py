@@ -227,7 +227,82 @@ def evaluate_all() -> Dict:
             }
         )
 
+    std_rel_paths = [
+        ("std::mem::raw_buf", ROOT_DIR / "std" / "mem" / "raw_buf"),
+        ("std::mem::arena", ROOT_DIR / "std" / "mem" / "arena"),
+        ("std::collections::vec", ROOT_DIR / "std" / "collections" / "vec"),
+        ("std::collections::vec_deque", ROOT_DIR / "std" / "collections" / "vec_deque"),
+        ("std::collections::hash_map", ROOT_DIR / "std" / "collections" / "hash_map"),
+        ("std::collections::lru_cache", ROOT_DIR / "std" / "collections" / "lru_cache"),
+        ("std::rt::intrinsics", ROOT_DIR / "std" / "rt" / "intrinsics"),
+        ("std::str::str_view", ROOT_DIR / "std" / "str" / "str_view"),
+        ("std::str::string_buf", ROOT_DIR / "std" / "str" / "string_buf"),
+        ("std::str::fmt", ROOT_DIR / "std" / "str" / "fmt"),
+        ("std::io::cursor", ROOT_DIR / "std" / "io" / "cursor"),
+        ("std::io::buf_io", ROOT_DIR / "std" / "io" / "buf_io"),
+        ("std::io::path_buf", ROOT_DIR / "std" / "io" / "path_buf"),
+        ("std::codec::varint", ROOT_DIR / "std" / "codec" / "varint"),
+        ("std::ffi::c_abi", ROOT_DIR / "std" / "ffi" / "c_abi"),
+    ]
+    std_rows = []
+    for mod_id, stem_path in std_rel_paths:
+        jni_file = stem_path.with_suffix(".jni")
+        jn_file = stem_path.with_suffix(".jn")
+        rs_file = stem_path.with_suffix(".rs")
+        if not (jni_file.exists() and jn_file.exists() and rs_file.exists()):
+            continue
+        jni_text = jni_file.read_text(encoding="utf-8")
+        jn_text = jn_file.read_text(encoding="utf-8")
+        rs_text = rs_file.read_text(encoding="utf-8")
+
+        jni_full_code, jni_iface_code, jni_prose = extract_jni_parts(jni_text)
+        rs_prod_text = rs_text.split("#[cfg(test)]")[0]
+
+        rs_tokens = count_code_tokens(rs_text)
+        rs_prod_tokens = count_code_tokens(rs_prod_text)
+        rs_test_tokens = rs_tokens - rs_prod_tokens
+
+        jni_full_tokens = count_code_tokens(jni_full_code)
+        jni_iface_tokens = count_code_tokens(jni_iface_code)
+        jni_prose_tokens = count_code_tokens(jni_prose)
+        jn_tokens = count_code_tokens(jn_text)
+        jenny_total = jni_full_tokens + jn_tokens
+        jenny_doc_all = jni_prose_tokens + jenny_total
+
+        syn = check_v2_syntax_compliance(jni_text, jn_text)
+        for k, v in syn.items():
+            syn_totals[k] += v
+
+        std_rows.append(
+            {
+                "module": mod_id,
+                "rs_tokens": rs_tokens,
+                "rs_prod_tokens": rs_prod_tokens,
+                "rs_test_tokens": rs_test_tokens,
+                "jni_iface_tokens": jni_iface_tokens,
+                "jni_full_tokens": jni_full_tokens,
+                "jni_prose_tokens": jni_prose_tokens,
+                "jn_tokens": jn_tokens,
+                "spun_tokens": jn_tokens,
+                "jenny_total_tokens": jenny_total,
+                "jenny_doc_all_tokens": jenny_doc_all,
+                "tcr": round(jenny_total / rs_tokens, 4),
+                "tcr_vs_prod": round(jenny_total / rs_prod_tokens, 4),
+                "tcr_doc_all": round(jenny_doc_all / rs_tokens, 4),
+                "tcr_impl": round(jn_tokens / rs_tokens, 4),
+                "tcr_impl_vs_prod": round(jn_tokens / rs_prod_tokens, 4),
+                "ecc_saving": round(1.0 - (jni_iface_tokens / jenny_total), 4),
+                "ecc_saving_vs_rs": round(1.0 - (jni_iface_tokens / rs_tokens), 4),
+                "ecc_saving_vs_rs_prod": round(1.0 - (jni_iface_tokens / rs_prod_tokens), 4),
+                "syntax_violations": syn,
+            }
+        )
+
     all_agg = _aggregate_subset(rows)
+    std_alpha1_agg = _aggregate_subset(std_rows[:6]) if len(std_rows) >= 6 else {}
+    std_alpha2_agg = _aggregate_subset(std_rows[6:]) if len(std_rows) > 6 else {}
+    std_agg = _aggregate_subset(std_rows) if std_rows else {}
+    grand_all_37_agg = _aggregate_subset(rows + std_rows) if std_rows else all_agg
     b01_b24_agg = _aggregate_subset(rows[:24])
     b25_agg = _aggregate_subset(rows[24:25])
     s0_agg = _aggregate_subset(rows[0:10])
@@ -268,6 +343,10 @@ def evaluate_all() -> Dict:
             "stage4_native_b22_b25": s4_all_agg,
             "subtotal_b01_b24": b01_b24_agg,
             "grand_total_b01_b25": all_agg,
+            "v02_alpha1_std_6": std_alpha1_agg,
+            "v02_alpha2_std_6": std_alpha2_agg,
+            "v02_std_all_12": std_agg,
+            "grand_total_all_37": grand_all_37_agg,
         },
         "stage2_mem_summary": {
             "s2_rs_tokens": s2_agg["rs_tokens"],
@@ -297,8 +376,12 @@ def evaluate_all() -> Dict:
             "s4_tcr_impl": s4_all_agg["tcr_impl"],
             "s4_ecc_saving": s4_all_agg["ecc_saving_self"],
         },
+        "v02_alpha1_std_summary": std_alpha1_agg,
+        "v02_alpha2_std_summary": std_alpha2_agg,
+        "v02_std_all_12_summary": std_agg,
         "syntax_totals": syn_totals,
         "benchmarks": rows,
+        "std_modules": std_rows,
     }
     snapshot_path = ROOT_DIR / ".jenny-cache" / "token_metrics_snapshot.json"
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)

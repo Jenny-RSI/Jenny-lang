@@ -1,0 +1,5466 @@
+{
+  "format": "Jenny-Canonical-AST-Archive-v1",
+  "package": "std",
+  "version": "0.2.0-alpha2",
+  "shipped_jn_source_files": 0,
+  "shipped_spun_files": 0,
+  "modules_count": 15,
+  "modules": {
+    "std::rt::intrinsics": {
+      "module_id": "std::rt::intrinsics",
+      "module_decl": "std_rt_intrinsics",
+      "jni_rel": "rt/intrinsics.jni",
+      "jni_abi_hash": "97d7e7aa0e5c07cf",
+      "imports": [],
+      "functions": [
+        {
+          "key": "rt_raw_alloc",
+          "name": "rt_raw_alloc",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "(cap == 0 && result == 0) || (cap > 0 && result != 0)"
+          ],
+          "body_stmts": [
+            "return jn_raw_alloc(cap)"
+          ]
+        },
+        {
+          "key": "rt_raw_realloc",
+          "name": "rt_raw_realloc",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "old_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "old_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "new_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "AllocNative",
+            "Mutate"
+          ],
+          "requires": [
+            "old_cap >= 0 && new_cap >= 0 && new_cap <= 1048576"
+          ],
+          "ensures": [
+            "(new_cap == 0 && result == 0) || (new_cap > 0 && result != 0)"
+          ],
+          "body_stmts": [
+            "return jn_raw_realloc(old_ptr, old_cap, new_cap)"
+          ]
+        },
+        {
+          "key": "rt_raw_free",
+          "name": "rt_raw_free",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "result == 0"
+          ],
+          "body_stmts": [
+            "jn_raw_free(raw_ptr)",
+            "return 0"
+          ]
+        },
+        {
+          "key": "rt_raw_get",
+          "name": "rt_raw_get",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [
+            "raw_ptr != 0 && idx >= 0"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "return jn_raw_get(raw_ptr, idx)"
+          ]
+        },
+        {
+          "key": "rt_raw_set",
+          "name": "rt_raw_set",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && idx >= 0"
+          ],
+          "ensures": [
+            "result == val"
+          ],
+          "body_stmts": [
+            "return jn_raw_set(raw_ptr, idx, val)"
+          ]
+        },
+        {
+          "key": "rt_raw_copy",
+          "name": "rt_raw_copy",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "dst_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "dst_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "src_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "src_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "count",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "count >= 0 && dst_off >= 0 && src_off >= 0"
+          ],
+          "ensures": [
+            "result == count"
+          ],
+          "body_stmts": [
+            "return jn_raw_copy(dst_ptr, dst_off, src_ptr, src_off, count)"
+          ]
+        },
+        {
+          "key": "rt_scratch_mark",
+          "name": "rt_scratch_mark",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result >= 0"
+          ],
+          "body_stmts": [
+            "return jn_scratch_arena_mark()"
+          ]
+        },
+        {
+          "key": "rt_scratch_alloc",
+          "name": "rt_scratch_alloc",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [
+            "cap >= 0 && cap <= 16384"
+          ],
+          "ensures": [
+            "(cap == 0 && result == 0) || (cap > 0 && result != 0)"
+          ],
+          "body_stmts": [
+            "return jn_scratch_arena_alloc(cap)"
+          ]
+        },
+        {
+          "key": "rt_scratch_release",
+          "name": "rt_scratch_release",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "mark",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "mark >= 0"
+          ],
+          "ensures": [
+            "result == 0"
+          ],
+          "body_stmts": [
+            "return jn_scratch_arena_release(mark)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_str",
+          "name": "rt_raw_put_str",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "s",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "write_off >= 0"
+          ],
+          "ensures": [
+            "result == write_off + s.len()"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_str(raw_ptr, write_off, s)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_string",
+          "name": "rt_raw_put_string",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "s",
+              "ty": "String",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "write_off >= 0"
+          ],
+          "ensures": [
+            "result == write_off + s.len()"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_string(raw_ptr, write_off, s)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_i64",
+          "name": "rt_raw_put_i64",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0"
+          ],
+          "ensures": [
+            "result > write_off && result <= write_off + 21"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_i64(raw_ptr, write_off, val)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_hex_u32",
+          "name": "rt_raw_put_hex_u32",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "digits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0 && digits >= 1 && digits <= 8"
+          ],
+          "ensures": [
+            "result == write_off + digits"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_hex_u32(raw_ptr, write_off, val, digits)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_hex_upper_u32",
+          "name": "rt_raw_put_hex_upper_u32",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "digits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0 && digits >= 1 && digits <= 8"
+          ],
+          "ensures": [
+            "result == write_off + digits"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_hex_upper_u32(raw_ptr, write_off, val, digits)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_pad_zero",
+          "name": "rt_raw_put_pad_zero",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "width",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0 && width >= 1 && width <= 20"
+          ],
+          "ensures": [
+            "result >= write_off + width"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_pad_zero(raw_ptr, write_off, val, width)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_bin_u32",
+          "name": "rt_raw_put_bin_u32",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "bits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0 && bits >= 1 && bits <= 32"
+          ],
+          "ensures": [
+            "result == write_off + bits"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_bin_u32(raw_ptr, write_off, val, bits)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_grouped_i64",
+          "name": "rt_raw_put_grouped_i64",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "sep_byte",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0 && sep_byte >= 0 && sep_byte <= 127"
+          ],
+          "ensures": [
+            "result > write_off && result <= write_off + 27"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_grouped_i64(raw_ptr, write_off, val, sep_byte)"
+          ]
+        },
+        {
+          "key": "rt_raw_put_bool",
+          "name": "rt_raw_put_bool",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "write_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "flag",
+              "ty": "bool",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "raw_ptr != 0 && write_off >= 0"
+          ],
+          "ensures": [
+            "(flag && result == write_off + 4) || (!flag && result == write_off + 5)"
+          ],
+          "body_stmts": [
+            "return jn_raw_put_bool(raw_ptr, write_off, flag)"
+          ]
+        },
+        {
+          "key": "rt_raw_eq_str",
+          "name": "rt_raw_eq_str",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "len",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "target",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [
+            "len >= 0"
+          ],
+          "ensures": [
+            "!result || len == target.len()"
+          ],
+          "body_stmts": [
+            "return jn_raw_eq_str(raw_ptr, len, target)"
+          ]
+        },
+        {
+          "key": "rt_raw_to_sso_string",
+          "name": "rt_raw_to_sso_string",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_ptr",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "start",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "len",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": null,
+          "effects": [],
+          "requires": [
+            "start >= 0 && len >= 0"
+          ],
+          "ensures": [
+            "result.len() == len",
+            "(len <= 22 && result.is_sso()) || (len > 22 && !result.is_sso())"
+          ],
+          "body_stmts": [
+            "return jn_raw_to_sso_string(raw_ptr, start, len)"
+          ]
+        },
+        {
+          "key": "rt_gc_begin_mark",
+          "name": "rt_gc_begin_mark",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "result == 0"
+          ],
+          "body_stmts": [
+            "jn_gc_begin_mark()",
+            "return 0"
+          ]
+        },
+        {
+          "key": "rt_gc_sweep_epoch",
+          "name": "rt_gc_sweep_epoch",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "result >= 0"
+          ],
+          "body_stmts": [
+            "return jn_gc_sweep_epoch()"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "c71b653d468be298"
+    },
+    "std::ffi::c_abi": {
+      "module_id": "std::ffi::c_abi",
+      "module_decl": "std_ffi_c_abi",
+      "jni_rel": "ffi/c_abi.jni",
+      "jni_abi_hash": "13676bd383f0f343",
+      "imports": [],
+      "functions": [
+        {
+          "key": "CFrameHeader.new",
+          "name": "new",
+          "struct_owner": "CFrameHeader",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "version",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "ihl",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "dscp",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "ecn",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "total_len",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "seq_id",
+              "ty": "u32",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "CFrameHeader",
+          "err_ty": "CAbiError",
+          "effects": [],
+          "requires": [
+            "version >= 4 && version <= 15",
+            "ihl >= 5 && ihl <= 15",
+            "dscp >= 0 && dscp <= 63",
+            "ecn >= 0 && ecn <= 3",
+            "total_len >= 20 && total_len <= 65535",
+            "total_len >= ihl * 4"
+          ],
+          "ensures": [
+            "result.version == version && result.ihl == ihl",
+            "result.dscp == dscp && result.ecn == ecn",
+            "result.total_len == total_len && result.seq_id == seq_id"
+          ],
+          "body_stmts": [
+            "return CFrameHeader {",
+            "version: version,",
+            "ihl: ihl,",
+            "dscp: dscp,",
+            "ecn: ecn,",
+            "total_len: total_len,",
+            "seq_id: seq_id,",
+            "}"
+          ]
+        },
+        {
+          "key": "CFrameHeader.header_byte_len",
+          "name": "header_byte_len",
+          "struct_owner": "CFrameHeader",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "CFrameHeader",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.ihl * 4 && result >= 20 && result <= 60"
+          ],
+          "body_stmts": [
+            "return self.ihl * 4"
+          ]
+        },
+        {
+          "key": "CFrameHeader.payload_byte_len",
+          "name": "payload_byte_len",
+          "struct_owner": "CFrameHeader",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "CFrameHeader",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.total_len - self.ihl * 4 && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.total_len - self.ihl * 4"
+          ]
+        },
+        {
+          "key": "union_from_raw",
+          "name": "union_from_raw",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "raw_val",
+              "ty": "u32",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "CWord32Union",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.raw_u32 == raw_val"
+          ],
+          "body_stmts": [
+            "return CWord32Union { raw_u32: raw_val }"
+          ]
+        },
+        {
+          "key": "union_from_halves",
+          "name": "union_from_halves",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "low16",
+              "ty": "u32",
+              "mode": "borrow"
+            },
+            {
+              "name": "high16",
+              "ty": "u32",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "CWord32Union",
+          "err_ty": "CAbiError",
+          "effects": [],
+          "requires": [
+            "low16 >= 0 && low16 <= 65535",
+            "high16 >= 0 && high16 <= 65535"
+          ],
+          "ensures": [
+            "result.halves.low16 == low16 && result.halves.high16 == high16"
+          ],
+          "body_stmts": [
+            "val h = CHalfWords { low16, high16 }",
+            "return CWord32Union { halves: h }"
+          ]
+        },
+        {
+          "key": "union_low16",
+          "name": "union_low16",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "u",
+              "ty": "CWord32Union",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result >= 0 && result <= 65535"
+          ],
+          "body_stmts": [
+            "return u.halves.low16"
+          ]
+        },
+        {
+          "key": "union_high16",
+          "name": "union_high16",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "u",
+              "ty": "CWord32Union",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result >= 0 && result <= 65535"
+          ],
+          "body_stmts": [
+            "return u.halves.high16"
+          ]
+        },
+        {
+          "key": "union_as_signed",
+          "name": "union_as_signed",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "u",
+              "ty": "CWord32Union",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [],
+          "body_stmts": [
+            "return u.signed_i32"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "4b9df1603df1b259"
+    },
+    "std::mem::raw_buf": {
+      "module_id": "std::mem::raw_buf",
+      "module_decl": "std_mem_raw_buf",
+      "jni_rel": "mem/raw_buf.jni",
+      "jni_abi_hash": "445824c2c4677905",
+      "imports": [
+        "std::rt::intrinsics"
+      ],
+      "functions": [
+        {
+          "key": "RawBuf.new",
+          "name": "new",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "RawBuf",
+          "err_ty": "MemError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.cap == cap"
+          ],
+          "body_stmts": [
+            "val p = rt_raw_alloc(cap)",
+            "return RawBuf { ptr: p, cap: cap }"
+          ]
+        },
+        {
+          "key": "RawBuf.capacity",
+          "name": "capacity",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.cap"
+          ],
+          "body_stmts": [
+            "return self.cap"
+          ]
+        },
+        {
+          "key": "RawBuf.read_at",
+          "name": "read_at",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "borrow"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MemError",
+          "effects": [],
+          "requires": [
+            "idx >= 0 && idx < self.cap"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "return rt_raw_get(self.ptr, idx)"
+          ]
+        },
+        {
+          "key": "RawBuf.write_at",
+          "name": "write_at",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MemError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "idx >= 0 && idx < self.cap"
+          ],
+          "ensures": [
+            "self.cap == old(self.cap)"
+          ],
+          "body_stmts": [
+            "return rt_raw_set(self.ptr, idx, val)"
+          ]
+        },
+        {
+          "key": "RawBuf.grow",
+          "name": "grow",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "min_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MemError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "min_cap > 0 && min_cap <= 1048576"
+          ],
+          "ensures": [
+            "self.cap >= min_cap && self.cap >= old(self.cap)"
+          ],
+          "body_stmts": [
+            "if self.cap >= min_cap {",
+            "return self.cap",
+            "}",
+            "val doubled = if self.cap == 0 { 4 } else { self.cap * 2 }",
+            "var target = if doubled < min_cap { min_cap } else { doubled }",
+            "if target > 1048576 {",
+            "target = 1048576",
+            "}",
+            "self.ptr = rt_raw_realloc(self.ptr, self.cap, target)",
+            "self.cap = target",
+            "return self.cap"
+          ]
+        },
+        {
+          "key": "RawBuf.copy_within",
+          "name": "copy_within",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "src_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "dst_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "count",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MemError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "count >= 0 && src_off >= 0 && dst_off >= 0",
+            "src_off + count <= self.cap && dst_off + count <= self.cap"
+          ],
+          "ensures": [
+            "result == count"
+          ],
+          "body_stmts": [
+            "return rt_raw_copy(self.ptr, dst_off, self.ptr, src_off, count)"
+          ]
+        },
+        {
+          "key": "RawBuf.release",
+          "name": "release",
+          "struct_owner": "RawBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RawBuf",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.cap == 0 && self.ptr == 0"
+          ],
+          "body_stmts": [
+            "val _ = rt_raw_free(self.ptr)",
+            "self.ptr = 0",
+            "self.cap = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "e64bb4f49cc23d77"
+    },
+    "std::mem::arena": {
+      "module_id": "std::mem::arena",
+      "module_decl": "std_mem_arena",
+      "jni_rel": "mem/arena.jni",
+      "jni_abi_hash": "1628b59472d264e8",
+      "imports": [
+        "std::rt::intrinsics"
+      ],
+      "functions": [
+        {
+          "key": "BumpArena.new",
+          "name": "new",
+          "struct_owner": "BumpArena",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "capacity",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "BumpArena",
+          "err_ty": "ArenaError",
+          "effects": [],
+          "requires": [
+            "capacity >= 64 && capacity <= 16777216"
+          ],
+          "ensures": [
+            "result.capacity == capacity && result.used == 0 && result.allocs == 0"
+          ],
+          "body_stmts": [
+            "return BumpArena { capacity: capacity, used: 0, allocs: 0, peak_used: 0 }"
+          ]
+        },
+        {
+          "key": "BumpArena.alloc_aligned",
+          "name": "alloc_aligned",
+          "struct_owner": "BumpArena",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BumpArena",
+              "mode": "mut"
+            },
+            {
+              "name": "size_bytes",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "ArenaError",
+          "effects": [
+            "Mutate",
+            "AllocRegion"
+          ],
+          "requires": [
+            "size_bytes > 0"
+          ],
+          "ensures": [
+            "self.used > old(self.used) && self.allocs == old(self.allocs) + 1"
+          ],
+          "body_stmts": [
+            "val rem = size_bytes % 8",
+            "val aligned = if rem == 0 { size_bytes } else { size_bytes + (8 - rem) }",
+            "guard self.used + aligned <= self.capacity else { raise ArenaError.OutOfMemory }",
+            "val offset = self.used",
+            "self.used += aligned",
+            "self.allocs += 1",
+            "if self.used > self.peak_used {",
+            "self.peak_used = self.used",
+            "}",
+            "return offset"
+          ]
+        },
+        {
+          "key": "BumpArena.checkpoint",
+          "name": "checkpoint",
+          "struct_owner": "BumpArena",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BumpArena",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.used"
+          ],
+          "body_stmts": [
+            "return self.used"
+          ]
+        },
+        {
+          "key": "BumpArena.rollback",
+          "name": "rollback",
+          "struct_owner": "BumpArena",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BumpArena",
+              "mode": "mut"
+            },
+            {
+              "name": "watermark",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "ArenaError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "watermark >= 0 && watermark <= self.used"
+          ],
+          "ensures": [
+            "self.used == watermark"
+          ],
+          "body_stmts": [
+            "self.used = watermark",
+            "return self.used"
+          ]
+        },
+        {
+          "key": "BumpArena.reset",
+          "name": "reset",
+          "struct_owner": "BumpArena",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BumpArena",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.used == 0 && self.allocs == 0 && self.peak_used >= old(self.peak_used)"
+          ],
+          "body_stmts": [
+            "self.used = 0",
+            "self.allocs = 0",
+            "return self.peak_used"
+          ]
+        },
+        {
+          "key": "immix_spawn_node",
+          "name": "immix_spawn_node",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "id",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "payload",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "next",
+              "ty": "^ImmixNode?",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "^ImmixNode",
+          "err_ty": null,
+          "effects": [
+            "AllocGC"
+          ],
+          "requires": [
+            "id >= 0"
+          ],
+          "ensures": [
+            "result.id == id && result.payload == payload"
+          ],
+          "body_stmts": [
+            "return ^ImmixNode { id: id, payload: payload, next: next }"
+          ]
+        },
+        {
+          "key": "immix_collect_keep_two",
+          "name": "immix_collect_keep_two",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "r1",
+              "ty": "^ImmixNode",
+              "mode": "borrow"
+            },
+            {
+              "name": "r2",
+              "ty": "^ImmixNode",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "AllocGC"
+          ],
+          "requires": [],
+          "ensures": [
+            "result >= 0"
+          ],
+          "body_stmts": [
+            "val _ = rt_gc_begin_mark()",
+            "jn_gc_mark_ptr(r1)",
+            "jn_gc_mark_ptr(r2)",
+            "return rt_gc_sweep_epoch()"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "24ef53b0e17f44f3"
+    },
+    "std::collections::vec": {
+      "module_id": "std::collections::vec",
+      "module_decl": "std_collections_vec",
+      "jni_rel": "collections/vec.jni",
+      "jni_abi_hash": "91145bd75a8029c8",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "Vec.new",
+          "name": "new",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "Vec",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return Vec { buf: b, len: 0 }"
+          ]
+        },
+        {
+          "key": "Vec.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "Vec",
+          "err_ty": "VecError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return Vec { buf: b, len: 0 }"
+          ]
+        },
+        {
+          "key": "Vec.len",
+          "name": "len",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "Vec.capacity",
+          "name": "capacity",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.buf.cap"
+          ],
+          "body_stmts": [
+            "return self.buf.cap"
+          ]
+        },
+        {
+          "key": "Vec.is_empty",
+          "name": "is_empty",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == (self.len == 0)"
+          ],
+          "body_stmts": [
+            "return self.len == 0"
+          ]
+        },
+        {
+          "key": "Vec.reserve",
+          "name": "reserve",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            },
+            {
+              "name": "additional",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "additional >= 0 && self.len + additional <= 1048576"
+          ],
+          "ensures": [
+            "self.buf.cap >= self.len + additional && self.len == old(self.len)"
+          ],
+          "body_stmts": [
+            "val needed = self.len + additional",
+            "if needed > self.buf.cap {",
+            "self.buf.grow(needed)?",
+            "}",
+            "return self.buf.cap"
+          ]
+        },
+        {
+          "key": "Vec.push",
+          "name": "push",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.len < 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + 1 && self.buf.cap >= self.len"
+          ],
+          "body_stmts": [
+            "if self.len == self.buf.cap {",
+            "self.buf.grow(self.len + 1)?",
+            "}",
+            "self.buf.write_at(self.len, val)?",
+            "self.len += 1",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "Vec.pop",
+          "name": "pop",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [
+            "self.len == old(self.len) - 1"
+          ],
+          "body_stmts": [
+            "self.len -= 1",
+            "val item = self.buf.read_at(self.len)?",
+            "return item"
+          ]
+        },
+        {
+          "key": "Vec.get",
+          "name": "get",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "borrow"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [],
+          "requires": [
+            "idx >= 0 && idx < self.len"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "val item = self.buf.read_at(idx)?",
+            "return item"
+          ]
+        },
+        {
+          "key": "Vec.set",
+          "name": "set",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "idx >= 0 && idx < self.len"
+          ],
+          "ensures": [
+            "self.len == old(self.len)"
+          ],
+          "body_stmts": [
+            "self.buf.write_at(idx, val)?",
+            "return val"
+          ]
+        },
+        {
+          "key": "Vec.insert_at",
+          "name": "insert_at",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "idx >= 0 && idx <= self.len",
+            "self.len < 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + 1"
+          ],
+          "body_stmts": [
+            "if self.len == self.buf.cap {",
+            "self.buf.grow(self.len + 1)?",
+            "}",
+            "val tail_count = self.len - idx",
+            "if tail_count > 0 {",
+            "self.buf.copy_within(idx, idx + 1, tail_count)?",
+            "}",
+            "self.buf.write_at(idx, val)?",
+            "self.len += 1",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "Vec.remove_at",
+          "name": "remove_at",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "VecError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "idx >= 0 && idx < self.len"
+          ],
+          "ensures": [
+            "self.len == old(self.len) - 1"
+          ],
+          "body_stmts": [
+            "val removed = self.buf.read_at(idx)?",
+            "val tail_count = self.len - idx - 1",
+            "if tail_count > 0 {",
+            "self.buf.copy_within(idx + 1, idx, tail_count)?",
+            "}",
+            "self.len -= 1",
+            "return removed"
+          ]
+        },
+        {
+          "key": "Vec.clear",
+          "name": "clear",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.buf.cap == old(self.buf.cap)"
+          ],
+          "body_stmts": [
+            "self.len = 0",
+            "return 0"
+          ]
+        },
+        {
+          "key": "Vec.drop_vec",
+          "name": "drop_vec",
+          "struct_owner": "Vec",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "Vec",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.len = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "561726d648b80727"
+    },
+    "std::collections::vec_deque": {
+      "module_id": "std::collections::vec_deque",
+      "module_decl": "std_collections_vec_deque",
+      "jni_rel": "collections/vec_deque.jni",
+      "jni_abi_hash": "37c15faae69d0cfa",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "VecDeque.new",
+          "name": "new",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "VecDeque",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == 0 && result.head == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return VecDeque { buf: b, head: 0, len: 0 }"
+          ]
+        },
+        {
+          "key": "VecDeque.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "VecDeque",
+          "err_ty": "DequeError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == cap && result.head == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return VecDeque { buf: b, head: 0, len: 0 }"
+          ]
+        },
+        {
+          "key": "VecDeque.len",
+          "name": "len",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "VecDeque.capacity",
+          "name": "capacity",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.buf.cap"
+          ],
+          "body_stmts": [
+            "return self.buf.cap"
+          ]
+        },
+        {
+          "key": "VecDeque.is_empty",
+          "name": "is_empty",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == (self.len == 0)"
+          ],
+          "body_stmts": [
+            "return self.len == 0"
+          ]
+        },
+        {
+          "key": "VecDeque.grow_ring",
+          "name": "grow_ring",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.buf.cap < 1048576"
+          ],
+          "ensures": [
+            "self.buf.cap > old(self.buf.cap) && self.head == 0 && self.len == old(self.len)"
+          ],
+          "body_stmts": [
+            "val old_cap = self.buf.cap",
+            "val new_cap = if old_cap == 0 { 4 } else { old_cap * 2 }",
+            "var new_buf = RawBuf.new(new_cap)?",
+            "var i = 0",
+            "while i < self.len {",
+            "val phys = (self.head + i) % old_cap",
+            "val item = self.buf.read_at(phys)?",
+            "new_buf.write_at(i, item)?",
+            "i += 1",
+            "}",
+            "self.buf.release()",
+            "self.buf = new_buf",
+            "self.head = 0",
+            "return self.buf.cap"
+          ]
+        },
+        {
+          "key": "VecDeque.push_back",
+          "name": "push_back",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.len < 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + 1"
+          ],
+          "body_stmts": [
+            "if self.len == self.buf.cap {",
+            "self.grow_ring()?",
+            "}",
+            "val phys = (self.head + self.len) % self.buf.cap",
+            "self.buf.write_at(phys, val)?",
+            "self.len += 1",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "VecDeque.push_front",
+          "name": "push_front",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.len < 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + 1"
+          ],
+          "body_stmts": [
+            "if self.len == self.buf.cap {",
+            "self.grow_ring()?",
+            "}",
+            "self.head = (self.head + self.buf.cap - 1) % self.buf.cap",
+            "self.buf.write_at(self.head, val)?",
+            "self.len += 1",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "VecDeque.pop_front",
+          "name": "pop_front",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [
+            "self.len == old(self.len) - 1"
+          ],
+          "body_stmts": [
+            "val item = self.buf.read_at(self.head)?",
+            "self.head = (self.head + 1) % self.buf.cap",
+            "self.len -= 1",
+            "if self.len == 0 {",
+            "self.head = 0",
+            "}",
+            "return item"
+          ]
+        },
+        {
+          "key": "VecDeque.pop_back",
+          "name": "pop_back",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [
+            "self.len == old(self.len) - 1"
+          ],
+          "body_stmts": [
+            "val phys = (self.head + self.len - 1) % self.buf.cap",
+            "val item = self.buf.read_at(phys)?",
+            "self.len -= 1",
+            "if self.len == 0 {",
+            "self.head = 0",
+            "}",
+            "return item"
+          ]
+        },
+        {
+          "key": "VecDeque.get",
+          "name": "get",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "borrow"
+            },
+            {
+              "name": "logical_idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "DequeError",
+          "effects": [],
+          "requires": [
+            "logical_idx >= 0 && logical_idx < self.len"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "val phys = (self.head + logical_idx) % self.buf.cap",
+            "val item = self.buf.read_at(phys)?",
+            "return item"
+          ]
+        },
+        {
+          "key": "VecDeque.clear",
+          "name": "clear",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.head == 0"
+          ],
+          "body_stmts": [
+            "self.head = 0",
+            "self.len = 0",
+            "return 0"
+          ]
+        },
+        {
+          "key": "VecDeque.drop_deque",
+          "name": "drop_deque",
+          "struct_owner": "VecDeque",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VecDeque",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.buf.cap == 0 && self.head == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.head = 0",
+            "self.len = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "10e33de046e0a0c6"
+    },
+    "std::collections::hash_map": {
+      "module_id": "std::collections::hash_map",
+      "module_decl": "std_collections_hash_map",
+      "jni_rel": "collections/hash_map.jni",
+      "jni_abi_hash": "f692dbefe1b87bf0",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "HashMap.new",
+          "name": "new",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "HashMap",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len == 0 && result.cap == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return HashMap { buf: b, cap: 0, len: 0, tombstones: 0 }"
+          ]
+        },
+        {
+          "key": "HashMap.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "initial_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "HashMap",
+          "err_ty": "MapError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "initial_cap >= 0 && initial_cap <= 262144"
+          ],
+          "ensures": [
+            "result.len == 0 && result.cap == initial_cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(initial_cap * 3)?",
+            "return HashMap { buf: b, cap: initial_cap, len: 0, tombstones: 0 }"
+          ]
+        },
+        {
+          "key": "HashMap.len",
+          "name": "len",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "HashMap.capacity",
+          "name": "capacity",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.cap"
+          ],
+          "body_stmts": [
+            "return self.cap"
+          ]
+        },
+        {
+          "key": "HashMap.is_empty",
+          "name": "is_empty",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == (self.len == 0)"
+          ],
+          "body_stmts": [
+            "return self.len == 0"
+          ]
+        },
+        {
+          "key": "HashMap.rehash_to",
+          "name": "rehash_to",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "mut"
+            },
+            {
+              "name": "new_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MapError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "new_cap >= 8 && new_cap <= 262144",
+            "self.len * 4 <= new_cap * 3"
+          ],
+          "ensures": [
+            "self.cap == new_cap && self.len == old(self.len) && self.tombstones == 0"
+          ],
+          "body_stmts": [
+            "var new_buf = RawBuf.new(new_cap * 3)?",
+            "var b = 0",
+            "while b < self.cap {",
+            "val st = self.buf.read_at(b * 3)?",
+            "if st == 1 {",
+            "val k = self.buf.read_at(b * 3 + 1)?",
+            "val v = self.buf.read_at(b * 3 + 2)?",
+            "var idx = ((k * 1103515245 + 12345) % new_cap + new_cap) % new_cap",
+            "var placed = 0",
+            "while placed == 0 {",
+            "val dst_st = new_buf.read_at(idx * 3)?",
+            "if dst_st == 0 {",
+            "new_buf.write_at(idx * 3, 1)?",
+            "new_buf.write_at(idx * 3 + 1, k)?",
+            "new_buf.write_at(idx * 3 + 2, v)?",
+            "placed = 1",
+            "} else {",
+            "idx = (idx + 1) % new_cap",
+            "}",
+            "}",
+            "}",
+            "b += 1",
+            "}",
+            "self.buf.release()",
+            "self.buf = new_buf",
+            "self.cap = new_cap",
+            "self.tombstones = 0",
+            "return self.cap"
+          ]
+        },
+        {
+          "key": "HashMap.insert",
+          "name": "insert",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "mut"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MapError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.len < 196608"
+          ],
+          "ensures": [
+            "self.len >= old(self.len) && self.len <= old(self.len) + 1"
+          ],
+          "body_stmts": [
+            "if (self.len + self.tombstones + 1) * 4 > self.cap * 3 {",
+            "val next_cap = if self.cap < 8 { 8 } else { self.cap * 2 }",
+            "self.rehash_to(next_cap)?",
+            "}",
+            "var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap",
+            "var first_tomb = -1",
+            "var steps = 0",
+            "while steps < self.cap {",
+            "val st = self.buf.read_at(idx * 3)?",
+            "if st == 0 {",
+            "val target = if first_tomb >= 0 { first_tomb } else { idx }",
+            "if first_tomb >= 0 {",
+            "self.tombstones -= 1",
+            "}",
+            "self.buf.write_at(target * 3, 1)?",
+            "self.buf.write_at(target * 3 + 1, key)?",
+            "self.buf.write_at(target * 3 + 2, val)?",
+            "self.len += 1",
+            "return self.len",
+            "}",
+            "if st == 1 {",
+            "val cur_k = self.buf.read_at(idx * 3 + 1)?",
+            "if cur_k == key {",
+            "self.buf.write_at(idx * 3 + 2, val)?",
+            "return self.len",
+            "}",
+            "} else {",
+            "if first_tomb < 0 {",
+            "first_tomb = idx",
+            "}",
+            "}",
+            "idx = (idx + 1) % self.cap",
+            "steps += 1",
+            "}",
+            "if first_tomb >= 0 {",
+            "self.tombstones -= 1",
+            "self.buf.write_at(first_tomb * 3, 1)?",
+            "self.buf.write_at(first_tomb * 3 + 1, key)?",
+            "self.buf.write_at(first_tomb * 3 + 2, val)?",
+            "self.len += 1",
+            "return self.len",
+            "}",
+            "raise MapError.CapacityOverflow"
+          ]
+        },
+        {
+          "key": "HashMap.get",
+          "name": "get",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "borrow"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MapError",
+          "effects": [],
+          "requires": [],
+          "ensures": [],
+          "body_stmts": [
+            "guard self.cap > 0 && self.len > 0 else { raise MapError.KeyNotFound }",
+            "var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap",
+            "var steps = 0",
+            "while steps < self.cap {",
+            "val st = self.buf.read_at(idx * 3)?",
+            "if st == 0 {",
+            "raise MapError.KeyNotFound",
+            "}",
+            "if st == 1 {",
+            "val cur_k = self.buf.read_at(idx * 3 + 1)?",
+            "if cur_k == key {",
+            "val v = self.buf.read_at(idx * 3 + 2)?",
+            "return v",
+            "}",
+            "}",
+            "idx = (idx + 1) % self.cap",
+            "steps += 1",
+            "}",
+            "raise MapError.KeyNotFound"
+          ]
+        },
+        {
+          "key": "HashMap.contains_key",
+          "name": "contains_key",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "borrow"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [],
+          "body_stmts": [
+            "if self.cap == 0 || self.len == 0 {",
+            "return false",
+            "}",
+            "var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap",
+            "var steps = 0",
+            "while steps < self.cap {",
+            "val st = self.buf.read_at(idx * 3)!",
+            "if st == 0 {",
+            "return false",
+            "}",
+            "if st == 1 {",
+            "val cur_k = self.buf.read_at(idx * 3 + 1)!",
+            "if cur_k == key {",
+            "return true",
+            "}",
+            "}",
+            "idx = (idx + 1) % self.cap",
+            "steps += 1",
+            "}",
+            "return false"
+          ]
+        },
+        {
+          "key": "HashMap.remove",
+          "name": "remove",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "mut"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "MapError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [
+            "self.len == old(self.len) - 1"
+          ],
+          "body_stmts": [
+            "var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap",
+            "var steps = 0",
+            "while steps < self.cap {",
+            "val st = self.buf.read_at(idx * 3)?",
+            "if st == 0 {",
+            "raise MapError.KeyNotFound",
+            "}",
+            "if st == 1 {",
+            "val cur_k = self.buf.read_at(idx * 3 + 1)?",
+            "if cur_k == key {",
+            "val removed_v = self.buf.read_at(idx * 3 + 2)?",
+            "self.buf.write_at(idx * 3, 2)?",
+            "self.len -= 1",
+            "self.tombstones += 1",
+            "return removed_v",
+            "}",
+            "}",
+            "idx = (idx + 1) % self.cap",
+            "steps += 1",
+            "}",
+            "raise MapError.KeyNotFound"
+          ]
+        },
+        {
+          "key": "HashMap.drop_map",
+          "name": "drop_map",
+          "struct_owner": "HashMap",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "HashMap",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.cap == 0 && self.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.cap = 0",
+            "self.len = 0",
+            "self.tombstones = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "b91a65d175c04fce"
+    },
+    "std::collections::lru_cache": {
+      "module_id": "std::collections::lru_cache",
+      "module_decl": "std_collections_lru_cache",
+      "jni_rel": "collections/lru_cache.jni",
+      "jni_abi_hash": "99fca3c5537b690e",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "LruCache.new",
+          "name": "new",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "capacity",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "LruCache",
+          "err_ty": "LruError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "capacity >= 1 && capacity <= 65536"
+          ],
+          "ensures": [
+            "result.capacity == capacity && result.len == 0 && result.hits == 0 && result.evictions == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(capacity * 5)?",
+            "return LruCache {",
+            "buf: b,",
+            "capacity: capacity,",
+            "len: 0,",
+            "head: -1,",
+            "tail: -1,",
+            "mru_key: 0,",
+            "hits: 0,",
+            "misses: 0,",
+            "evictions: 0",
+            "}"
+          ]
+        },
+        {
+          "key": "LruCache.len",
+          "name": "len",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "LruCache.promote_slot",
+          "name": "promote_slot",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "mut"
+            },
+            {
+              "name": "slot",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "LruError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "slot >= 0 && slot < self.len"
+          ],
+          "ensures": [
+            "self.head == slot && self.len == old(self.len)"
+          ],
+          "body_stmts": [
+            "val k = self.buf.read_at(slot * 5 + 1)?",
+            "self.mru_key = k",
+            "if self.head == slot {",
+            "return slot",
+            "}",
+            "val prev_s = self.buf.read_at(slot * 5 + 3)?",
+            "val next_s = self.buf.read_at(slot * 5 + 4)?",
+            "if prev_s >= 0 {",
+            "self.buf.write_at(prev_s * 5 + 4, next_s)?",
+            "}",
+            "if next_s >= 0 {",
+            "self.buf.write_at(next_s * 5 + 3, prev_s)?",
+            "}",
+            "if self.tail == slot {",
+            "self.tail = prev_s",
+            "}",
+            "self.buf.write_at(slot * 5 + 3, -1)?",
+            "self.buf.write_at(slot * 5 + 4, self.head)?",
+            "if self.head >= 0 {",
+            "self.buf.write_at(self.head * 5 + 3, slot)?",
+            "}",
+            "self.head = slot",
+            "if self.tail < 0 {",
+            "self.tail = slot",
+            "}",
+            "return slot"
+          ]
+        },
+        {
+          "key": "LruCache.put",
+          "name": "put",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "mut"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "LruError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len >= 1 && self.len <= self.capacity && self.mru_key == key"
+          ],
+          "body_stmts": [
+            "var s = 0",
+            "while s < self.len {",
+            "val active = self.buf.read_at(s * 5)?",
+            "if active == 1 {",
+            "val cur_k = self.buf.read_at(s * 5 + 1)?",
+            "if cur_k == key {",
+            "self.buf.write_at(s * 5 + 2, val)?",
+            "self.promote_slot(s)?",
+            "return self.len",
+            "}",
+            "}",
+            "s += 1",
+            "}",
+            "if self.len < self.capacity {",
+            "val new_s = self.len",
+            "self.buf.write_at(new_s * 5, 1)?",
+            "self.buf.write_at(new_s * 5 + 1, key)?",
+            "self.buf.write_at(new_s * 5 + 2, val)?",
+            "self.buf.write_at(new_s * 5 + 3, -1)?",
+            "self.buf.write_at(new_s * 5 + 4, self.head)?",
+            "if self.head >= 0 {",
+            "self.buf.write_at(self.head * 5 + 3, new_s)?",
+            "}",
+            "self.head = new_s",
+            "if self.tail < 0 {",
+            "self.tail = new_s",
+            "}",
+            "self.len += 1",
+            "self.mru_key = key",
+            "return self.len",
+            "}",
+            "val evict_s = self.tail",
+            "self.evictions += 1",
+            "self.buf.write_at(evict_s * 5 + 1, key)?",
+            "self.buf.write_at(evict_s * 5 + 2, val)?",
+            "self.promote_slot(evict_s)?",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "LruCache.get_promote",
+          "name": "get_promote",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "mut"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "LruError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [
+            "self.hits == old(self.hits) + 1 && self.mru_key == key"
+          ],
+          "body_stmts": [
+            "var s = 0",
+            "while s < self.len {",
+            "val active = self.buf.read_at(s * 5)?",
+            "if active == 1 {",
+            "val cur_k = self.buf.read_at(s * 5 + 1)?",
+            "if cur_k == key {",
+            "val v = self.buf.read_at(s * 5 + 2)?",
+            "self.hits += 1",
+            "self.promote_slot(s)?",
+            "return v",
+            "}",
+            "}",
+            "s += 1",
+            "}",
+            "self.misses += 1",
+            "raise LruError.KeyNotFound"
+          ]
+        },
+        {
+          "key": "LruCache.peek",
+          "name": "peek",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "borrow"
+            },
+            {
+              "name": "key",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "LruError",
+          "effects": [],
+          "requires": [
+            "self.len > 0"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "var s = 0",
+            "while s < self.len {",
+            "val active = self.buf.read_at(s * 5)?",
+            "if active == 1 {",
+            "val cur_k = self.buf.read_at(s * 5 + 1)?",
+            "if cur_k == key {",
+            "val v = self.buf.read_at(s * 5 + 2)?",
+            "return v",
+            "}",
+            "}",
+            "s += 1",
+            "}",
+            "raise LruError.KeyNotFound"
+          ]
+        },
+        {
+          "key": "LruCache.drop_cache",
+          "name": "drop_cache",
+          "struct_owner": "LruCache",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "LruCache",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.len = 0",
+            "self.head = -1",
+            "self.tail = -1",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "c88934e0861885f2"
+    },
+    "std::str::str_view": {
+      "module_id": "std::str::str_view",
+      "module_decl": "std_str_str_view",
+      "jni_rel": "str/str_view.jni",
+      "jni_abi_hash": "b1072deee797f52d",
+      "imports": [],
+      "functions": [
+        {
+          "key": "StrSliceView.from_bounds",
+          "name": "from_bounds",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "start",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "len",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "source_cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "StrSliceView",
+          "err_ty": "StrError",
+          "effects": [],
+          "requires": [
+            "source_cap >= 0 && start >= 0 && len >= 0",
+            "start + len <= source_cap"
+          ],
+          "ensures": [
+            "result.start == start && result.len == len && result.source_cap == source_cap"
+          ],
+          "body_stmts": [
+            "return StrSliceView { start: start, len: len, source_cap: source_cap }"
+          ]
+        },
+        {
+          "key": "StrSliceView.len",
+          "name": "len",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StrSliceView.is_empty",
+          "name": "is_empty",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == (self.len == 0)"
+          ],
+          "body_stmts": [
+            "return self.len == 0"
+          ]
+        },
+        {
+          "key": "StrSliceView.end_offset",
+          "name": "end_offset",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.start + self.len && result <= self.source_cap"
+          ],
+          "body_stmts": [
+            "return self.start + self.len"
+          ]
+        },
+        {
+          "key": "StrSliceView.advance",
+          "name": "advance",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "mut"
+            },
+            {
+              "name": "count",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StrError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "count >= 0 && count <= self.len"
+          ],
+          "ensures": [
+            "self.start == old(self.start) + count && self.len == old(self.len) - count && result == self.len"
+          ],
+          "body_stmts": [
+            "self.start += count",
+            "self.len -= count",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StrSliceView.truncate_len",
+          "name": "truncate_len",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "mut"
+            },
+            {
+              "name": "new_len",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StrError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "new_len >= 0 && new_len <= self.len"
+          ],
+          "ensures": [
+            "self.len == new_len && self.start == old(self.start) && result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = new_len",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StrSliceView.sub_slice",
+          "name": "sub_slice",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "borrow"
+            },
+            {
+              "name": "rel_off",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "sub_len",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "StrSliceView",
+          "err_ty": "StrError",
+          "effects": [],
+          "requires": [
+            "rel_off >= 0 && sub_len >= 0",
+            "rel_off + sub_len <= self.len"
+          ],
+          "ensures": [
+            "result.start == self.start + rel_off && result.len == sub_len && result.source_cap == self.source_cap"
+          ],
+          "body_stmts": [
+            "return StrSliceView { start: self.start + rel_off, len: sub_len, source_cap: self.source_cap }"
+          ]
+        },
+        {
+          "key": "StrSliceView.slice_str",
+          "name": "slice_str",
+          "struct_owner": "StrSliceView",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StrSliceView",
+              "mode": "borrow"
+            },
+            {
+              "name": "raw",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "str",
+          "err_ty": "StrError",
+          "effects": [],
+          "requires": [
+            "raw.len() == self.source_cap"
+          ],
+          "ensures": [
+            "result.len() == self.len"
+          ],
+          "body_stmts": [
+            "return raw.sub_str(self.start, self.len)"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "543b92dc86341382"
+    },
+    "std::str::string_buf": {
+      "module_id": "std::str::string_buf",
+      "module_decl": "std_str_string_buf",
+      "jni_rel": "str/string_buf.jni",
+      "jni_abi_hash": "b8294e208f73e013",
+      "imports": [
+        "std::rt::intrinsics",
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "StringBuf.new",
+          "name": "new",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "StringBuf",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return StringBuf { buf: b, len: 0 }"
+          ]
+        },
+        {
+          "key": "StringBuf.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "StringBuf",
+          "err_ty": "StringError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.len == 0 && result.buf.cap == cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return StringBuf { buf: b, len: 0 }"
+          ]
+        },
+        {
+          "key": "StringBuf.len",
+          "name": "len",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StringBuf.capacity",
+          "name": "capacity",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.buf.cap && result >= self.len"
+          ],
+          "body_stmts": [
+            "return self.buf.cap"
+          ]
+        },
+        {
+          "key": "StringBuf.push_byte",
+          "name": "push_byte",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "ch",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StringError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "ch >= 0 && ch <= 127",
+            "self.len < 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + 1 && result == self.len"
+          ],
+          "body_stmts": [
+            "if self.len == self.buf.cap {",
+            "self.buf.grow(self.len + 1)?",
+            "}",
+            "self.buf.write_at(self.len, ch)?",
+            "self.len += 1",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StringBuf.push_str",
+          "name": "push_str",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "s",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StringError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.len + s.len() <= 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + s.len() && result == self.len"
+          ],
+          "body_stmts": [
+            "val slen = s.len()",
+            "if slen > 0 && self.len + slen > self.buf.cap {",
+            "self.buf.grow(self.len + slen)?",
+            "}",
+            "self.len = rt_raw_put_str(self.buf.ptr, self.len, s)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StringBuf.push_repeat",
+          "name": "push_repeat",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "ch",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "count",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StringError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "ch >= 0 && ch <= 127",
+            "count >= 0 && self.len + count <= 1048576"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + count && result == self.len"
+          ],
+          "body_stmts": [
+            "if count > 0 && self.len + count > self.buf.cap {",
+            "self.buf.grow(self.len + count)?",
+            "}",
+            "var i = 0",
+            "while i < count {",
+            "self.buf.write_at(self.len + i, ch)?",
+            "i += 1",
+            "}",
+            "self.len += count",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StringBuf.byte_at",
+          "name": "byte_at",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            },
+            {
+              "name": "idx",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StringError",
+          "effects": [],
+          "requires": [
+            "idx >= 0 && idx < self.len"
+          ],
+          "ensures": [
+            "result >= 0 && result <= 127"
+          ],
+          "body_stmts": [
+            "val v = self.buf.read_at(idx)?",
+            "return v"
+          ]
+        },
+        {
+          "key": "StringBuf.truncate",
+          "name": "truncate",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "new_len",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "StringError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "new_len >= 0 && new_len <= self.len"
+          ],
+          "ensures": [
+            "self.len == new_len && result == new_len"
+          ],
+          "body_stmts": [
+            "self.len = new_len",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "StringBuf.equals_str",
+          "name": "equals_str",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            },
+            {
+              "name": "target",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [],
+          "body_stmts": [
+            "return rt_raw_eq_str(self.buf.ptr, self.len, target)"
+          ]
+        },
+        {
+          "key": "StringBuf.to_sso_string",
+          "name": "to_sso_string",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": null,
+          "effects": [
+            "AllocGC"
+          ],
+          "requires": [],
+          "ensures": [
+            "result.len() == self.len"
+          ],
+          "body_stmts": [
+            "return rt_raw_to_sso_string(self.buf.ptr, 0, self.len)"
+          ]
+        },
+        {
+          "key": "StringBuf.fnv1a_hash",
+          "name": "fnv1a_hash",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result >= 0"
+          ],
+          "body_stmts": [
+            "var h = 2166136261",
+            "var i = 0",
+            "while i < self.len {",
+            "val b = rt_raw_get(self.buf.ptr, i)",
+            "h = ((h ^ b) * 16777619) % 2147483647",
+            "if h < 0 {",
+            "h = -h",
+            "}",
+            "i += 1",
+            "}",
+            "return h"
+          ]
+        },
+        {
+          "key": "StringBuf.drop_string",
+          "name": "drop_string",
+          "struct_owner": "StringBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "StringBuf",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.buf.cap == 0 && result == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.len = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "d83933088d2a0698"
+    },
+    "std::str::fmt": {
+      "module_id": "std::str::fmt",
+      "module_decl": "std_str_fmt",
+      "jni_rel": "str/fmt.jni",
+      "jni_abi_hash": "94f67a03c0e1abd2",
+      "imports": [
+        "std::rt::intrinsics",
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "format",
+          "name": "format",
+          "struct_owner": null,
+          "is_spin_variadic": true,
+          "params": [
+            {
+              "name": "args",
+              "ty": "Formattable",
+              "mode": "variadic"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len() >= 0"
+          ],
+          "body_stmts": [
+            "return format_with(Culture.Invariant, ...args)"
+          ]
+        },
+        {
+          "key": "format_with",
+          "name": "format_with",
+          "struct_owner": null,
+          "is_spin_variadic": true,
+          "params": [
+            {
+              "name": "culture",
+              "ty": "Culture",
+              "mode": "borrow"
+            },
+            {
+              "name": "args",
+              "ty": "Formattable",
+              "mode": "variadic"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len() >= 0"
+          ],
+          "body_stmts": [
+            "var fb = FmtBuffer.in_arena(512)!",
+            "@spin for arg in args {",
+            "@spin if arg is (val_item, spec, ...params) {",
+            "val_item.fmt_spec_into(mut fb, culture, spec, ...params)!",
+            "} else if arg is FmtInto {",
+            "arg.fmt_into(mut fb, culture)!",
+            "} else if arg is ToStr {",
+            "fb.put_str(arg.to_str())!",
+            "}",
+            "}",
+            "val out = fb.to_sso_string()",
+            "fb.drop_fmt()",
+            "return out"
+          ]
+        },
+        {
+          "key": "RoleBadge.new",
+          "name": "new",
+          "struct_owner": "RoleBadge",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "name",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "RoleBadge",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.name.len() == name.len()"
+          ],
+          "body_stmts": [
+            "return RoleBadge { name: name }"
+          ]
+        },
+        {
+          "key": "RoleBadge.to_str",
+          "name": "to_str",
+          "struct_owner": "RoleBadge",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "RoleBadge",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "str",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len() == self.name.len()"
+          ],
+          "body_stmts": [
+            "return self.name"
+          ]
+        },
+        {
+          "key": "KvTag.new",
+          "name": "new",
+          "struct_owner": "KvTag",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "label",
+              "ty": "str",
+              "mode": "borrow"
+            },
+            {
+              "name": "code",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "KvTag",
+          "err_ty": null,
+          "effects": [],
+          "requires": [
+            "code >= 0"
+          ],
+          "ensures": [
+            "result.code == code"
+          ],
+          "body_stmts": [
+            "return KvTag { label: label, code: code }"
+          ]
+        },
+        {
+          "key": "KvTag.fmt_into",
+          "name": "fmt_into",
+          "struct_owner": "KvTag",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "KvTag",
+              "mode": "borrow"
+            },
+            {
+              "name": "fb",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "culture",
+              "ty": "Culture",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "fb.len > old(fb.len) && result == fb.len"
+          ],
+          "body_stmts": [
+            "fb.put_str(self.label)?",
+            "fb.put_str(\"=\")?",
+            "return fb.put_grouped_i64(self.code, culture)?"
+          ]
+        },
+        {
+          "key": "FmtBuffer.in_arena",
+          "name": "in_arena",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "FmtBuffer",
+          "err_ty": "FmtError",
+          "effects": [],
+          "requires": [
+            "cap >= 0 && cap <= 16384"
+          ],
+          "ensures": [
+            "result.len == 0 && result.cap == cap && result.arena_mark >= 0"
+          ],
+          "body_stmts": [
+            "val mark = rt_scratch_mark()",
+            "val ptr = rt_scratch_alloc(cap)",
+            "val raw = RawBuf { ptr: ptr, cap: cap }",
+            "return FmtBuffer { buf: raw, len: 0, cap: cap, arena_mark: mark }"
+          ]
+        },
+        {
+          "key": "FmtBuffer.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "FmtBuffer",
+          "err_ty": "FmtError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.len == 0 && result.cap == cap && result.arena_mark == -1"
+          ],
+          "body_stmts": [
+            "val raw = RawBuf.new(cap)?",
+            "return FmtBuffer { buf: raw, len: 0, cap: cap, arena_mark: -1 }"
+          ]
+        },
+        {
+          "key": "FmtBuffer.len",
+          "name": "len",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.capacity",
+          "name": "capacity",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.cap"
+          ],
+          "body_stmts": [
+            "return self.cap"
+          ]
+        },
+        {
+          "key": "FmtBuffer.clear",
+          "name": "clear",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.cap == old(self.cap)",
+            "result == 0"
+          ],
+          "body_stmts": [
+            "self.len = 0",
+            "return 0"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_str",
+          "name": "put_str",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "s",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len + s.len() <= self.cap"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + s.len()",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_str(self.buf.ptr, self.len, s)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_string",
+          "name": "put_string",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "s",
+              "ty": "String",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len + s.len() <= self.cap"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + s.len()",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_string(self.buf.ptr, self.len, s)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_i64",
+          "name": "put_i64",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len + 21 <= self.cap"
+          ],
+          "ensures": [
+            "self.len > old(self.len) && self.len <= old(self.len) + 21",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_i64(self.buf.ptr, self.len, val)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_hex_u32",
+          "name": "put_hex_u32",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "digits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "val >= 0 && val <= 4294967295",
+            "digits >= 1 && digits <= 8",
+            "self.len + digits <= self.cap"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + digits",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_hex_u32(self.buf.ptr, self.len, val, digits)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_hex_upper_u32",
+          "name": "put_hex_upper_u32",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "digits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "val >= 0 && val <= 4294967295",
+            "digits >= 1 && digits <= 8",
+            "self.len + digits <= self.cap"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + digits",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_hex_upper_u32(self.buf.ptr, self.len, val, digits)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_pad_zero",
+          "name": "put_pad_zero",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "width",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "width >= 1 && width <= 20",
+            "self.len + 21 <= self.cap"
+          ],
+          "ensures": [
+            "self.len >= old(self.len) + width && result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_pad_zero(self.buf.ptr, self.len, val, width)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_bin_u32",
+          "name": "put_bin_u32",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "bits",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "val >= 0 && val <= 4294967295",
+            "bits >= 1 && bits <= 32",
+            "self.len + bits <= self.cap"
+          ],
+          "ensures": [
+            "self.len == old(self.len) + bits",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_bin_u32(self.buf.ptr, self.len, val, bits)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_grouped_i64",
+          "name": "put_grouped_i64",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "culture",
+              "ty": "Culture",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len + 27 <= self.cap"
+          ],
+          "ensures": [
+            "self.len > old(self.len) && self.len <= old(self.len) + 27",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "val sep = if culture == Culture.DeDE { 46 } else { 44 }",
+            "self.len = rt_raw_put_grouped_i64(self.buf.ptr, self.len, val, sep)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_spec",
+          "name": "put_spec",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "culture",
+              "ty": "Culture",
+              "mode": "borrow"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "spec",
+              "ty": "FmtSpec",
+              "mode": "borrow"
+            },
+            {
+              "name": "param",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len > old(self.len) && result == self.len"
+          ],
+          "body_stmts": [
+            "if spec == FmtSpec.HexLower {",
+            "val digits = if param == 0 { 8 } else { param }",
+            "return self.put_hex_u32(val, digits)?",
+            "} else if spec == FmtSpec.HexUpper {",
+            "val digits_up = if param == 0 { 8 } else { param }",
+            "return self.put_hex_upper_u32(val, digits_up)?",
+            "} else if spec == FmtSpec.PadZero {",
+            "val width = if param == 0 { 4 } else { param }",
+            "return self.put_pad_zero(val, width)?",
+            "} else if spec == FmtSpec.Bin {",
+            "val bits = if param == 0 { 8 } else { param }",
+            "return self.put_bin_u32(val, bits)?",
+            "} else if spec == FmtSpec.GroupedInt {",
+            "return self.put_grouped_i64(val, culture)?",
+            "}",
+            "return self.put_i64(val)?"
+          ]
+        },
+        {
+          "key": "FmtBuffer.put_bool",
+          "name": "put_bool",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            },
+            {
+              "name": "flag",
+              "ty": "bool",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "FmtError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.len + 5 <= self.cap"
+          ],
+          "ensures": [
+            "(flag && self.len == old(self.len) + 4) || (!flag && self.len == old(self.len) + 5)",
+            "result == self.len"
+          ],
+          "body_stmts": [
+            "self.len = rt_raw_put_bool(self.buf.ptr, self.len, flag)",
+            "return self.len"
+          ]
+        },
+        {
+          "key": "FmtBuffer.equals_str",
+          "name": "equals_str",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "borrow"
+            },
+            {
+              "name": "target",
+              "ty": "str",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "bool",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "!result || self.len == target.len()"
+          ],
+          "body_stmts": [
+            "return rt_raw_eq_str(self.buf.ptr, self.len, target)"
+          ]
+        },
+        {
+          "key": "FmtBuffer.to_sso_string",
+          "name": "to_sso_string",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.len() == self.len",
+            "(self.len <= 22 && result.is_sso()) || (self.len > 22 && !result.is_sso())"
+          ],
+          "body_stmts": [
+            "return rt_raw_to_sso_string(self.buf.ptr, 0, self.len)"
+          ]
+        },
+        {
+          "key": "FmtBuffer.slice_to_sso",
+          "name": "slice_to_sso",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "borrow"
+            },
+            {
+              "name": "start",
+              "ty": "i64",
+              "mode": "borrow"
+            },
+            {
+              "name": "sub_len",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "String",
+          "err_ty": "FmtError",
+          "effects": [],
+          "requires": [
+            "start >= 0 && sub_len >= 0",
+            "start + sub_len <= self.len"
+          ],
+          "ensures": [
+            "result.len() == sub_len",
+            "(sub_len <= 22 && result.is_sso()) || (sub_len > 22 && !result.is_sso())"
+          ],
+          "body_stmts": [
+            "return rt_raw_to_sso_string(self.buf.ptr, start, sub_len)"
+          ]
+        },
+        {
+          "key": "FmtBuffer.drop_fmt",
+          "name": "drop_fmt",
+          "struct_owner": "FmtBuffer",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "FmtBuffer",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.len == 0 && self.cap == 0 && self.arena_mark == -1 && result == 0"
+          ],
+          "body_stmts": [
+            "if self.arena_mark >= 0 {",
+            "val _ = rt_scratch_release(self.arena_mark)",
+            "self.buf.ptr = 0",
+            "self.buf.cap = 0",
+            "} else {",
+            "val _ = self.buf.release()",
+            "}",
+            "self.len = 0",
+            "self.cap = 0",
+            "self.arena_mark = -1",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "3e525b0af84afe77"
+    },
+    "std::io::cursor": {
+      "module_id": "std::io::cursor",
+      "module_decl": "std_io_cursor",
+      "jni_rel": "io/cursor.jni",
+      "jni_abi_hash": "3d1b26c95e675c04",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "IoCursor.new",
+          "name": "new",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [],
+          "ret_ty": "IoCursor",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result.pos == 0 && result.filled == 0 && result.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return IoCursor { buf: b, pos: 0, filled: 0 }"
+          ]
+        },
+        {
+          "key": "IoCursor.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "IoCursor",
+          "err_ty": "CursorError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.pos == 0 && result.filled == 0 && result.buf.cap == cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return IoCursor { buf: b, pos: 0, filled: 0 }"
+          ]
+        },
+        {
+          "key": "IoCursor.remaining",
+          "name": "remaining",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.filled - self.pos && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.filled - self.pos"
+          ]
+        },
+        {
+          "key": "IoCursor.write_word",
+          "name": "write_word",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CursorError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.pos < 1048576"
+          ],
+          "ensures": [
+            "self.pos == old(self.pos) + 1 && self.filled >= self.pos && result == self.pos"
+          ],
+          "body_stmts": [
+            "if self.pos == self.buf.cap {",
+            "self.buf.grow(self.pos + 1)?",
+            "}",
+            "self.buf.write_at(self.pos, val)?",
+            "self.pos += 1",
+            "if self.pos > self.filled {",
+            "self.filled = self.pos",
+            "}",
+            "return self.pos"
+          ]
+        },
+        {
+          "key": "IoCursor.read_word",
+          "name": "read_word",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CursorError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.pos < self.filled"
+          ],
+          "ensures": [
+            "self.pos == old(self.pos) + 1"
+          ],
+          "body_stmts": [
+            "val v = self.buf.read_at(self.pos)?",
+            "self.pos += 1",
+            "return v"
+          ]
+        },
+        {
+          "key": "IoCursor.seek_to",
+          "name": "seek_to",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "mut"
+            },
+            {
+              "name": "target_pos",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CursorError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "target_pos >= 0 && target_pos <= self.filled"
+          ],
+          "ensures": [
+            "self.pos == target_pos && result == target_pos"
+          ],
+          "body_stmts": [
+            "self.pos = target_pos",
+            "return self.pos"
+          ]
+        },
+        {
+          "key": "IoCursor.rewind",
+          "name": "rewind",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.pos == 0 && self.filled == old(self.filled) && result == 0"
+          ],
+          "body_stmts": [
+            "self.pos = 0",
+            "return 0"
+          ]
+        },
+        {
+          "key": "IoCursor.drop_cursor",
+          "name": "drop_cursor",
+          "struct_owner": "IoCursor",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "IoCursor",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.pos == 0 && self.filled == 0 && self.buf.cap == 0 && result == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.pos = 0",
+            "self.filled = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "59325a9cf7504cc9"
+    },
+    "std::io::buf_io": {
+      "module_id": "std::io::buf_io",
+      "module_decl": "std_io_buf_io",
+      "jni_rel": "io/buf_io.jni",
+      "jni_abi_hash": "e93e00cfa5fc5185",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "BufChannel.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "BufChannel",
+          "err_ty": "BufIoError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.read_pos == 0 && result.write_pos == 0 && result.buf.cap == cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return BufChannel { buf: b, read_pos: 0, write_pos: 0, flushed_count: 0 }"
+          ]
+        },
+        {
+          "key": "BufChannel.unread_len",
+          "name": "unread_len",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.write_pos - self.read_pos && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.write_pos - self.read_pos"
+          ]
+        },
+        {
+          "key": "BufChannel.write_frame",
+          "name": "write_frame",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "mut"
+            },
+            {
+              "name": "payload",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "BufIoError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "self.write_pos < 1048576"
+          ],
+          "ensures": [
+            "self.write_pos == old(self.write_pos) + 1 && result == self.write_pos - self.read_pos"
+          ],
+          "body_stmts": [
+            "if self.write_pos == self.buf.cap {",
+            "self.buf.grow(self.write_pos + 1)?",
+            "}",
+            "self.buf.write_at(self.write_pos, payload)?",
+            "self.write_pos += 1",
+            "return self.write_pos - self.read_pos"
+          ]
+        },
+        {
+          "key": "BufChannel.read_frame",
+          "name": "read_frame",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "BufIoError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.read_pos < self.write_pos"
+          ],
+          "ensures": [
+            "self.read_pos == old(self.read_pos) + 1"
+          ],
+          "body_stmts": [
+            "val v = self.buf.read_at(self.read_pos)?",
+            "self.read_pos += 1",
+            "return v"
+          ]
+        },
+        {
+          "key": "BufChannel.compact",
+          "name": "compact",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "BufIoError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.read_pos == 0 && self.write_pos == old(self.write_pos) - old(self.read_pos) && result == self.write_pos"
+          ],
+          "body_stmts": [
+            "val unread = self.write_pos - self.read_pos",
+            "if self.read_pos > 0 && unread > 0 {",
+            "self.buf.copy_within(self.read_pos, 0, unread)?",
+            "}",
+            "self.read_pos = 0",
+            "self.write_pos = unread",
+            "return self.write_pos"
+          ]
+        },
+        {
+          "key": "BufChannel.flush_all",
+          "name": "flush_all",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.read_pos == 0 && self.write_pos == 0 && self.flushed_count == old(self.flushed_count) + (old(self.write_pos) - old(self.read_pos)) && result == self.flushed_count"
+          ],
+          "body_stmts": [
+            "val unread = self.write_pos - self.read_pos",
+            "self.flushed_count += unread",
+            "self.read_pos = 0",
+            "self.write_pos = 0",
+            "return self.flushed_count"
+          ]
+        },
+        {
+          "key": "BufChannel.drop_channel",
+          "name": "drop_channel",
+          "struct_owner": "BufChannel",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "BufChannel",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.read_pos == 0 && self.write_pos == 0 && self.buf.cap == 0 && result == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.read_pos = 0",
+            "self.write_pos = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "dfcef2872bc6f4ee"
+    },
+    "std::io::path_buf": {
+      "module_id": "std::io::path_buf",
+      "module_decl": "std_io_path_buf",
+      "jni_rel": "io/path_buf.jni",
+      "jni_abi_hash": "bae08cead7045d3a",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "PathBuf.new",
+          "name": "new",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "is_abs",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "PathBuf",
+          "err_ty": "PathError",
+          "effects": [],
+          "requires": [
+            "is_abs == 0 || is_abs == 1"
+          ],
+          "ensures": [
+            "result.depth == 0 && result.is_abs == is_abs && result.buf.cap == 0"
+          ],
+          "body_stmts": [
+            "val b = RawBuf { ptr: 0, cap: 0 }",
+            "return PathBuf { buf: b, depth: 0, is_abs: is_abs }"
+          ]
+        },
+        {
+          "key": "PathBuf.depth",
+          "name": "depth",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.depth && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.depth"
+          ]
+        },
+        {
+          "key": "PathBuf.push_segment",
+          "name": "push_segment",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "mut"
+            },
+            {
+              "name": "seg_id",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "PathError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "seg_id > 0",
+            "self.depth < 65536"
+          ],
+          "ensures": [
+            "self.depth == old(self.depth) + 1 && result == self.depth"
+          ],
+          "body_stmts": [
+            "if self.depth == self.buf.cap {",
+            "self.buf.grow(self.depth + 1)?",
+            "}",
+            "self.buf.write_at(self.depth, seg_id)?",
+            "self.depth += 1",
+            "return self.depth"
+          ]
+        },
+        {
+          "key": "PathBuf.pop_segment",
+          "name": "pop_segment",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "PathError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.depth > 0"
+          ],
+          "ensures": [
+            "self.depth == old(self.depth) - 1"
+          ],
+          "body_stmts": [
+            "self.depth -= 1",
+            "val v = self.buf.read_at(self.depth)?",
+            "return v"
+          ]
+        },
+        {
+          "key": "PathBuf.normalize_parent",
+          "name": "normalize_parent",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "PathError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.depth > 0"
+          ],
+          "ensures": [
+            "self.depth == old(self.depth) - 1 && result == self.depth"
+          ],
+          "body_stmts": [
+            "self.depth -= 1",
+            "return self.depth"
+          ]
+        },
+        {
+          "key": "PathBuf.leaf_segment",
+          "name": "leaf_segment",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "PathError",
+          "effects": [],
+          "requires": [
+            "self.depth > 0"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "val v = self.buf.read_at(self.depth - 1)?",
+            "return v"
+          ]
+        },
+        {
+          "key": "PathBuf.drop_path",
+          "name": "drop_path",
+          "struct_owner": "PathBuf",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "PathBuf",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.depth == 0 && self.buf.cap == 0 && result == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.depth = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "bf7d66b8962cb6bb"
+    },
+    "std::codec::varint": {
+      "module_id": "std::codec::varint",
+      "module_decl": "std_codec_varint",
+      "jni_rel": "codec/varint.jni",
+      "jni_abi_hash": "a7710187275eda2a",
+      "imports": [
+        "std::mem::raw_buf"
+      ],
+      "functions": [
+        {
+          "key": "zigzag_encode",
+          "name": "zigzag_encode",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result >= 0"
+          ],
+          "body_stmts": [
+            "if val >= 0 {",
+            "return val * 2",
+            "}",
+            "return (-val) * 2 - 1"
+          ]
+        },
+        {
+          "key": "zigzag_decode",
+          "name": "zigzag_decode",
+          "struct_owner": null,
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "encoded",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CodecError",
+          "effects": [],
+          "requires": [
+            "encoded >= 0"
+          ],
+          "ensures": [],
+          "body_stmts": [
+            "val half = encoded / 2",
+            "if encoded % 2 == 0 {",
+            "return half",
+            "}",
+            "return -(half + 1)"
+          ]
+        },
+        {
+          "key": "VarintStream.with_capacity",
+          "name": "with_capacity",
+          "struct_owner": "VarintStream",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "cap",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "VarintStream",
+          "err_ty": "CodecError",
+          "effects": [
+            "AllocNative"
+          ],
+          "requires": [
+            "cap >= 0 && cap <= 1048576"
+          ],
+          "ensures": [
+            "result.read_off == 0 && result.write_off == 0 && result.buf.cap == cap"
+          ],
+          "body_stmts": [
+            "val b = RawBuf.new(cap)?",
+            "return VarintStream { buf: b, read_off: 0, write_off: 0 }"
+          ]
+        },
+        {
+          "key": "VarintStream.unread_bytes",
+          "name": "unread_bytes",
+          "struct_owner": "VarintStream",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VarintStream",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [],
+          "requires": [],
+          "ensures": [
+            "result == self.write_off - self.read_off && result >= 0"
+          ],
+          "body_stmts": [
+            "return self.write_off - self.read_off"
+          ]
+        },
+        {
+          "key": "VarintStream.encode_u64",
+          "name": "encode_u64",
+          "struct_owner": "VarintStream",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VarintStream",
+              "mode": "mut"
+            },
+            {
+              "name": "val",
+              "ty": "i64",
+              "mode": "borrow"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CodecError",
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [
+            "val >= 0",
+            "self.write_off + 10 <= 1048576"
+          ],
+          "ensures": [
+            "self.write_off > old(self.write_off) && result == self.write_off - old(self.write_off)"
+          ],
+          "body_stmts": [
+            "if self.write_off + 10 > self.buf.cap {",
+            "self.buf.grow(self.write_off + 10)?",
+            "}",
+            "val start_off = self.write_off",
+            "var rem = val",
+            "while rem >= 128 {",
+            "val low7 = (rem % 128) + 128",
+            "self.buf.write_at(self.write_off, low7)?",
+            "self.write_off += 1",
+            "rem = rem / 128",
+            "}",
+            "self.buf.write_at(self.write_off, rem)?",
+            "self.write_off += 1",
+            "return self.write_off - start_off"
+          ]
+        },
+        {
+          "key": "VarintStream.decode_u64",
+          "name": "decode_u64",
+          "struct_owner": "VarintStream",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VarintStream",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": "CodecError",
+          "effects": [
+            "Mutate"
+          ],
+          "requires": [
+            "self.read_off < self.write_off"
+          ],
+          "ensures": [
+            "self.read_off > old(self.read_off) && result >= 0"
+          ],
+          "body_stmts": [
+            "var acc = 0",
+            "var mult = 1",
+            "var steps = 0",
+            "while steps < 9 {",
+            "if self.read_off >= self.write_off {",
+            "raise CodecError.UnexpectedEof",
+            "}",
+            "val byte_val = self.buf.read_at(self.read_off)?",
+            "self.read_off += 1",
+            "if byte_val < 128 {",
+            "acc += byte_val * mult",
+            "return acc",
+            "}",
+            "acc += (byte_val - 128) * mult",
+            "mult = mult * 128",
+            "steps += 1",
+            "}",
+            "raise CodecError.VarintOverflow"
+          ]
+        },
+        {
+          "key": "VarintStream.drop_stream",
+          "name": "drop_stream",
+          "struct_owner": "VarintStream",
+          "is_spin_variadic": false,
+          "params": [
+            {
+              "name": "self",
+              "ty": "VarintStream",
+              "mode": "mut"
+            }
+          ],
+          "ret_ty": "i64",
+          "err_ty": null,
+          "effects": [
+            "Mutate",
+            "AllocNative"
+          ],
+          "requires": [],
+          "ensures": [
+            "self.read_off == 0 && self.write_off == 0 && self.buf.cap == 0 && result == 0"
+          ],
+          "body_stmts": [
+            "self.buf.release()",
+            "self.read_off = 0",
+            "self.write_off = 0",
+            "return 0"
+          ]
+        }
+      ],
+      "canonical_ast_sha256": "0a63f21a2d344fcd"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+module std_str_str_view
+
+impl StrSliceView {
+    pub fn from_bounds(start: i64, len: i64, source_cap: i64) -> StrSliceView ! StrError {
+        return StrSliceView { start: start, len: len, source_cap: source_cap }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.len == 0
+    }
+
+    pub fn end_offset(self) -> i64 {
+        return self.start + self.len
+    }
+
+    pub fn advance(mut self, count: i64) -> i64 ! StrError {
+        self.start += count
+        self.len -= count
+        return self.len
+    }
+
+    pub fn truncate_len(mut self, new_len: i64) -> i64 ! StrError {
+        self.len = new_len
+        return self.len
+    }
+
+    pub fn sub_slice(self, rel_off: i64, sub_len: i64) -> StrSliceView ! StrError {
+        return StrSliceView { start: self.start + rel_off, len: sub_len, source_cap: self.source_cap }
+    }
+
+    pub fn slice_str(self, raw: str) -> str ! StrError {
+        return raw.sub_str(self.start, self.len)
+    }
+}

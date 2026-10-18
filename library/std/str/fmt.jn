@@ -1,0 +1,164 @@
+module std_str_fmt
+
+import std::rt::intrinsics
+import std::mem::raw_buf
+
+@spin pub fn format(...args: Formattable) -> String {
+    return format_with(Culture.Invariant, ...args)
+}
+
+@spin pub fn format_with(culture: Culture, ...args: Formattable) -> String {
+    var fb = FmtBuffer.in_arena(512)!
+    @spin for arg in args {
+        @spin if arg is (val_item, spec, ...params) {
+            val_item.fmt_spec_into(mut fb, culture, spec, ...params)!
+        } else if arg is FmtInto {
+            arg.fmt_into(mut fb, culture)!
+        } else if arg is ToStr {
+            fb.put_str(arg.to_str())!
+        }
+    }
+    val out = fb.to_sso_string()
+    fb.drop_fmt()
+    return out
+}
+
+impl RoleBadge {
+    pub fn new(name: str) -> RoleBadge {
+        return RoleBadge { name: name }
+    }
+
+    pub fn to_str(self) -> str {
+        return self.name
+    }
+}
+
+impl KvTag {
+    pub fn new(label: str, code: i64) -> KvTag {
+        return KvTag { label: label, code: code }
+    }
+
+    pub fn fmt_into(self, mut fb: FmtBuffer, culture: Culture) -> i64 ! FmtError {
+        fb.put_str(self.label)?
+        fb.put_str("=")?
+        return fb.put_grouped_i64(self.code, culture)?
+    }
+}
+
+impl FmtBuffer {
+    pub fn in_arena(cap: i64) -> FmtBuffer ! FmtError {
+        val mark = rt_scratch_mark()
+        val ptr = rt_scratch_alloc(cap)
+        val raw = RawBuf { ptr: ptr, cap: cap }
+        return FmtBuffer { buf: raw, len: 0, cap: cap, arena_mark: mark }
+    }
+
+    pub fn with_capacity(cap: i64) -> FmtBuffer ! FmtError {
+        val raw = RawBuf.new(cap)?
+        return FmtBuffer { buf: raw, len: 0, cap: cap, arena_mark: -1 }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.cap
+    }
+
+    pub fn clear(mut self) -> i64 {
+        self.len = 0
+        return 0
+    }
+
+    pub fn put_str(mut self, s: str) -> i64 ! FmtError {
+        self.len = rt_raw_put_str(self.buf.ptr, self.len, s)
+        return self.len
+    }
+
+    pub fn put_string(mut self, s: String) -> i64 ! FmtError {
+        self.len = rt_raw_put_string(self.buf.ptr, self.len, s)
+        return self.len
+    }
+
+    pub fn put_i64(mut self, val: i64) -> i64 ! FmtError {
+        self.len = rt_raw_put_i64(self.buf.ptr, self.len, val)
+        return self.len
+    }
+
+    pub fn put_hex_u32(mut self, val: i64, digits: i64) -> i64 ! FmtError {
+        self.len = rt_raw_put_hex_u32(self.buf.ptr, self.len, val, digits)
+        return self.len
+    }
+
+    pub fn put_hex_upper_u32(mut self, val: i64, digits: i64) -> i64 ! FmtError {
+        self.len = rt_raw_put_hex_upper_u32(self.buf.ptr, self.len, val, digits)
+        return self.len
+    }
+
+    pub fn put_pad_zero(mut self, val: i64, width: i64) -> i64 ! FmtError {
+        self.len = rt_raw_put_pad_zero(self.buf.ptr, self.len, val, width)
+        return self.len
+    }
+
+    pub fn put_bin_u32(mut self, val: i64, bits: i64) -> i64 ! FmtError {
+        self.len = rt_raw_put_bin_u32(self.buf.ptr, self.len, val, bits)
+        return self.len
+    }
+
+    pub fn put_grouped_i64(mut self, val: i64, culture: Culture) -> i64 ! FmtError {
+        val sep = if culture == Culture.DeDE { 46 } else { 44 }
+        self.len = rt_raw_put_grouped_i64(self.buf.ptr, self.len, val, sep)
+        return self.len
+    }
+
+    pub fn put_spec(mut self, culture: Culture, val: i64, spec: FmtSpec, param: i64) -> i64 ! FmtError {
+        if spec == FmtSpec.HexLower {
+            val digits = if param == 0 { 8 } else { param }
+            return self.put_hex_u32(val, digits)?
+        } else if spec == FmtSpec.HexUpper {
+            val digits_up = if param == 0 { 8 } else { param }
+            return self.put_hex_upper_u32(val, digits_up)?
+        } else if spec == FmtSpec.PadZero {
+            val width = if param == 0 { 4 } else { param }
+            return self.put_pad_zero(val, width)?
+        } else if spec == FmtSpec.Bin {
+            val bits = if param == 0 { 8 } else { param }
+            return self.put_bin_u32(val, bits)?
+        } else if spec == FmtSpec.GroupedInt {
+            return self.put_grouped_i64(val, culture)?
+        }
+        return self.put_i64(val)?
+    }
+
+    pub fn put_bool(mut self, flag: bool) -> i64 ! FmtError {
+        self.len = rt_raw_put_bool(self.buf.ptr, self.len, flag)
+        return self.len
+    }
+
+    pub fn equals_str(self, target: str) -> bool {
+        return rt_raw_eq_str(self.buf.ptr, self.len, target)
+    }
+
+    pub fn to_sso_string(self) -> String {
+        return rt_raw_to_sso_string(self.buf.ptr, 0, self.len)
+    }
+
+    pub fn slice_to_sso(self, start: i64, sub_len: i64) -> String ! FmtError {
+        return rt_raw_to_sso_string(self.buf.ptr, start, sub_len)
+    }
+
+    pub fn drop_fmt(mut self) -> i64 {
+        if self.arena_mark >= 0 {
+            val _ = rt_scratch_release(self.arena_mark)
+            self.buf.ptr = 0
+            self.buf.cap = 0
+        } else {
+            val _ = self.buf.release()
+        }
+        self.len = 0
+        self.cap = 0
+        self.arena_mark = -1
+        return 0
+    }
+}

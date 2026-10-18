@@ -1,0 +1,93 @@
+# `std::io::path_buf` — Normalized Path Component Builder (`PathBuf`)
+
+## 1. Architectural Intent & Rust `std::path::PathBuf` Comparison
+In Rust (`std::path::PathBuf`), `push("..")` appends a literal parent component without normalizing the path in-place unless `fs::canonicalize` is invoked with OS I/O side effects, which can expose path-traversal (`..`) vulnerabilities when constructing sandboxed relative paths.
+
+In Jenny's `std::io::path_buf`, `PathBuf` maintains a normalized component stack backed by `std::mem::raw_buf::RawBuf` (`invariant self.depth >= 0 && self.depth <= self.buf.cap`), rejecting invalid or root-escaping traversal segments via explicit `requires ... else PathError` contracts.
+
+```jenny
+module std_io_path_buf
+
+import std::mem::raw_buf
+
+pub enum PathError {
+    EmptyPath,
+    InvalidSegment,
+    TraversalEscape,
+    CapacityOverflow,
+}
+
+pub struct PathBuf {
+    buf: RawBuf,
+    depth: i64 = 0,
+    is_abs: i64 = 0,
+
+    invariant self.depth >= 0 && self.depth <= self.buf.cap && (self.is_abs == 0 || self.is_abs == 1)
+}
+
+impl PathBuf {
+    pub fn new(is_abs: i64) -> PathBuf ! PathError
+        effects []
+        requires is_abs == 0 || is_abs == 1 else PathError.InvalidSegment
+        ensures result.depth == 0 && result.is_abs == is_abs && result.buf.cap == 0
+
+    pub fn depth(self) -> i64
+        effects []
+        ensures result == self.depth && result >= 0
+
+    pub fn push_segment(mut self, seg_id: i64) -> i64 ! PathError
+        effects [Mutate, AllocNative]
+        requires seg_id > 0 else PathError.InvalidSegment
+        requires self.depth < 65536 else PathError.CapacityOverflow
+        ensures self.depth == old(self.depth) + 1 && result == self.depth
+
+    pub fn pop_segment(mut self) -> i64 ! PathError
+        effects [Mutate]
+        requires self.depth > 0 else PathError.EmptyPath
+        ensures self.depth == old(self.depth) - 1
+
+    pub fn normalize_parent(mut self) -> i64 ! PathError
+        effects [Mutate]
+        requires self.depth > 0 else PathError.TraversalEscape
+        ensures self.depth == old(self.depth) - 1 && result == self.depth
+
+    pub fn leaf_segment(self) -> i64 ! PathError
+        effects []
+        requires self.depth > 0 else PathError.EmptyPath
+
+    pub fn drop_path(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.depth == 0 && self.buf.cap == 0 && result == 0
+}
+
+@example("EX-STD-PATH-01: PathBuf push_segment, leaf_segment, normalize_parent, pop_segment, and drop") {
+    var p = PathBuf.new(1)!
+    assert(p.depth() == 0)
+    assert(p.is_abs == 1)
+    p.push_segment(10)!
+    p.push_segment(20)!
+    p.push_segment(30)!
+    assert(p.leaf_segment()! == 30)
+    p.normalize_parent()!
+    assert(p.leaf_segment()! == 20)
+    val popped = p.pop_segment()!
+    assert(popped == 20)
+    assert(p.depth() == 1)
+    p.drop_path()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-PATH-02: PathBuf blocks root traversal escape and invalid segments") {
+    var p = PathBuf.new(0)!
+    val e1 = p.normalize_parent()
+    assert(e1 is Err(PathError.TraversalEscape))
+    val e2 = p.pop_segment()
+    assert(e2 is Err(PathError.EmptyPath))
+    val e3 = p.push_segment(0)
+    assert(e3 is Err(PathError.InvalidSegment))
+    val e4 = p.push_segment(-5)
+    assert(e4 is Err(PathError.InvalidSegment))
+    p.drop_path()
+    assert(active_native_boxes() == 0)
+}
+```

@@ -1,0 +1,106 @@
+{
+  "pattern_id": "crud::service",
+  "kind": "apply_decorator",
+  "description": "Declarative CRUD service with audit sequence and cache hit counters (@apply(crud::service(...)))",
+  "methods": [
+    {
+      "name": "new",
+      "params": [],
+      "ret_ty": "{Struct}",
+      "err_ty": null,
+      "ensures": [
+        "result.active_count == 0 && result.total_balance == 0"
+      ],
+      "body_template": [
+        "    pub fn new() -> {Struct} {",
+        "        return {Struct} { active_count: 0, total_balance: 0, cache_hits: 0, audit_seq: 0 }",
+        "    }"
+      ]
+    },
+    {
+      "name": "create_account",
+      "params": [
+        { "mode": "mut", "name": "self", "ty": "{Struct}" },
+        { "mode": "borrow", "name": "initial_balance", "ty": "i64" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": "ServiceError",
+      "ensures": [
+        "self.active_count == old(self.active_count) + 1",
+        "self.audit_seq == old(self.audit_seq) + 1"
+      ],
+      "body_template": [
+        "    pub fn create_account(mut self, initial_balance: i64) -> i64 ! ServiceError {",
+        "        guard initial_balance >= 0 else { raise ServiceError.InvalidBalance }",
+        "        guard self.active_count < 1000 else { raise ServiceError.QuotaExceeded }",
+        "        self.active_count += 1",
+        "        self.total_balance += initial_balance",
+        "        self.audit_seq += 1",
+        "        return self.active_count",
+        "    }"
+      ]
+    },
+    {
+      "name": "deposit",
+      "params": [
+        { "mode": "mut", "name": "self", "ty": "{Struct}" },
+        { "mode": "borrow", "name": "amount", "ty": "i64" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": "ServiceError",
+      "ensures": [
+        "self.total_balance == old(self.total_balance) + amount",
+        "self.audit_seq == old(self.audit_seq) + 1"
+      ],
+      "body_template": [
+        "    pub fn deposit(mut self, amount: i64) -> i64 ! ServiceError {",
+        "        guard self.active_count > 0 else { raise ServiceError.NotFound }",
+        "        guard amount > 0 else { raise ServiceError.InvalidBalance }",
+        "        self.total_balance += amount",
+        "        self.audit_seq += 1",
+        "        return self.total_balance",
+        "    }"
+      ]
+    },
+    {
+      "name": "query_summary",
+      "params": [
+        { "mode": "mut", "name": "self", "ty": "{Struct}" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": null,
+      "ensures": [
+        "self.cache_hits == old(self.cache_hits) + 1"
+      ],
+      "body_template": [
+        "    pub fn query_summary(mut self) -> i64 {",
+        "        self.cache_hits += 1",
+        "        return self.total_balance * 100 + self.active_count * 10 + self.cache_hits",
+        "    }"
+      ]
+    },
+    {
+      "name": "delete_account",
+      "params": [
+        { "mode": "mut", "name": "self", "ty": "{Struct}" },
+        { "mode": "borrow", "name": "balance_to_remove", "ty": "i64" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": "ServiceError",
+      "ensures": [
+        "self.active_count == old(self.active_count) - 1",
+        "self.audit_seq == old(self.audit_seq) + 1"
+      ],
+      "body_template": [
+        "    pub fn delete_account(mut self, balance_to_remove: i64) -> i64 ! ServiceError {",
+        "        guard self.active_count > 0 else { raise ServiceError.NotFound }",
+        "        guard balance_to_remove >= 0 && balance_to_remove <= self.total_balance else { raise ServiceError.InvalidBalance }",
+        "        self.active_count -= 1",
+        "        self.total_balance -= balance_to_remove",
+        "        self.audit_seq += 1",
+        "        return self.active_count",
+        "    }"
+      ]
+    }
+  ]
+}

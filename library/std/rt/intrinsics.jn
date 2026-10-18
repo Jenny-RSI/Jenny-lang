@@ -1,0 +1,91 @@
+module std_rt_intrinsics
+
+pub fn rt_raw_alloc(cap: i64) -> i64 {
+    return jn_raw_alloc(cap)
+}
+
+pub fn rt_raw_realloc(old_ptr: i64, old_cap: i64, new_cap: i64) -> i64 {
+    return jn_raw_realloc(old_ptr, old_cap, new_cap)
+}
+
+pub fn rt_raw_free(raw_ptr: i64) -> i64 {
+    jn_raw_free(raw_ptr)
+    return 0
+}
+
+pub fn rt_raw_get(raw_ptr: i64, idx: i64) -> i64 {
+    return jn_raw_get(raw_ptr, idx)
+}
+
+pub fn rt_raw_set(raw_ptr: i64, idx: i64, val: i64) -> i64 {
+    return jn_raw_set(raw_ptr, idx, val)
+}
+
+pub fn rt_raw_copy(dst_ptr: i64, dst_off: i64, src_ptr: i64, src_off: i64, count: i64) -> i64 {
+    return jn_raw_copy(dst_ptr, dst_off, src_ptr, src_off, count)
+}
+
+pub fn rt_scratch_mark() -> i64 {
+    return jn_scratch_arena_mark()
+}
+
+pub fn rt_scratch_alloc(cap: i64) -> i64 {
+    return jn_scratch_arena_alloc(cap)
+}
+
+pub fn rt_scratch_release(mark: i64) -> i64 {
+    return jn_scratch_arena_release(mark)
+}
+
+pub fn rt_raw_put_str(raw_ptr: i64, write_off: i64, s: str) -> i64 {
+    return jn_raw_put_str(raw_ptr, write_off, s)
+}
+
+pub fn rt_raw_put_string(raw_ptr: i64, write_off: i64, s: String) -> i64 {
+    return jn_raw_put_string(raw_ptr, write_off, s)
+}
+
+pub fn rt_raw_put_i64(raw_ptr: i64, write_off: i64, val: i64) -> i64 {
+    return jn_raw_put_i64(raw_ptr, write_off, val)
+}
+
+pub fn rt_raw_put_hex_u32(raw_ptr: i64, write_off: i64, val: i64, digits: i64) -> i64 {
+    return jn_raw_put_hex_u32(raw_ptr, write_off, val, digits)
+}
+
+pub fn rt_raw_put_hex_upper_u32(raw_ptr: i64, write_off: i64, val: i64, digits: i64) -> i64 {
+    return jn_raw_put_hex_upper_u32(raw_ptr, write_off, val, digits)
+}
+
+pub fn rt_raw_put_pad_zero(raw_ptr: i64, write_off: i64, val: i64, width: i64) -> i64 {
+    return jn_raw_put_pad_zero(raw_ptr, write_off, val, width)
+}
+
+pub fn rt_raw_put_bin_u32(raw_ptr: i64, write_off: i64, val: i64, bits: i64) -> i64 {
+    return jn_raw_put_bin_u32(raw_ptr, write_off, val, bits)
+}
+
+pub fn rt_raw_put_grouped_i64(raw_ptr: i64, write_off: i64, val: i64, sep_byte: i64) -> i64 {
+    return jn_raw_put_grouped_i64(raw_ptr, write_off, val, sep_byte)
+}
+
+pub fn rt_raw_put_bool(raw_ptr: i64, write_off: i64, flag: bool) -> i64 {
+    return jn_raw_put_bool(raw_ptr, write_off, flag)
+}
+
+pub fn rt_raw_eq_str(raw_ptr: i64, len: i64, target: str) -> bool {
+    return jn_raw_eq_str(raw_ptr, len, target)
+}
+
+pub fn rt_raw_to_sso_string(raw_ptr: i64, start: i64, len: i64) -> String {
+    return jn_raw_to_sso_string(raw_ptr, start, len)
+}
+
+pub fn rt_gc_begin_mark() -> i64 {
+    jn_gc_begin_mark()
+    return 0
+}
+
+pub fn rt_gc_sweep_epoch() -> i64 {
+    return jn_gc_sweep_epoch()
+}

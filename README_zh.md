@@ -36,20 +36,22 @@
 
 ---
 
-## 🚀 快速复现与验证命令
+## 🚀 快速复现与验证命令（Node.js v24 原生 TypeScript 编译器）
 
 ```powershell
-# 1. 复现 B01~B25 全量 Token 经济学数据 (TCR / TCR_impl / ECC)
+# 1. 编译全仓 40 个模块（B01~B25 + 15 个 library/std 模块），执行 79 个 @example 沙箱与 18 项 Stage 1~4 变异门禁
+node compiler/src/jenny.ts --mutate
+
+# 2. 运行全仓 40 模块契约模糊测试与 30,000 步有状态容器 Fuzzing (共 33,380 次调用，0 内存泄漏)
+node compiler/src/jenny.ts --fuzz
+
+# 3. 运行 Spindle 白盒包安全审计、供应链故障注入 (6/6) 与霍尔逻辑契约 SemVer 校验 (4/4)
+node compiler/src/jenny.ts audit
+node compiler/src/jenny.ts mutate
+node compiler/src/jenny.ts semver-check
+
+# 4. 复现 B01~B25 全量 Token 经济学数据 (TCR / TCR_impl / ECC)
 python benchmarks/eval/measure_tokens.py
-
-# 2. 运行 Stage 0 运行时契约故障回归套件 (11/11 拦截，退出码 42)
-python compiler/jenny-nano/jenny_nano.py --mutate
-
-# 3. 编译全部 25 个模块为 C99 原生机器码，执行 49 个 @example 沙箱与 15 项 Stage 1~4 变异测试
-python compiler/jenny-flow/jenny_flow.py --mutate --build-native
-
-# 4. 运行契约模糊测试与 20 轮零泄漏压力重放 (2,480 次调用)
-python compiler/jenny-flow/jenny_flow.py --fuzz
 ```
 
 ---
@@ -60,10 +62,11 @@ python compiler/jenny-flow/jenny_flow.py --fuzz
   * [《Spinning Jenny 学术论文全文 (中文)》](./docs/paper/spinning_jenny_paper_zh.md) · [English Paper](./docs/paper/spinning_jenny_paper_en.md)
   * [《全局版本演进路线图 (`v0.1 -> v1.0`)》](./ROADMAP_zh.md) · [`v0.1` 路线图归档](./docs/zh/roadmap/roadmap_v0.1.md) · [`v0.2 (Jenny-Std)` 标准库实战路线图](./docs/zh/roadmap/roadmap_v0.2.md)
   * [《`v0.1` 阶段性总结与 Rust / Go 横向对比报告》](./docs/zh/reports/jenny_v1_retrospective_and_cross_lang_comparison.md)
+  * [《`v0.2-alpha1` 与 `v0.2-alpha2` 标准库及 Spindle 验收报告》](./docs/zh/reports/v0.2_alpha2_std_and_semver_report.md)
 * **架构宪章与语言规范 v2.0 (`docs/zh/design/`)**：
   * [《Jenny 语言设计宪章与 AI 原生架构总纲》](./docs/zh/design/哲学与总纲.md)
   * [《渐进式实证演进方案与最小验证集》](./docs/zh/design/演进路线与最小验证集.md)
   * [《对象生命期管理：AI 跨语言痛点与实证基线》](./docs/zh/design/对象生命期管理_AI跨语言痛点与实证基线.md)
-  * [《Jenny 语言核心规范 v2.0 分卷 (00 ~ 11)》](./docs/zh/design/specs/00_index_and_overview.md)
+  * [《Jenny 语言核心规范 v2.0 分卷 (00 ~ 13)》](./docs/zh/design/specs/00_index_and_overview.md)
 * **各阶段验收报告 (`docs/zh/reports/`)**：
   * [Stage 0 验收](./docs/zh/reports/stage0_acceptance_criteria.md) · [Stage 1 验收](./docs/zh/reports/stage1_acceptance_criteria.md) · [Phase 1 Ollama 3B 评测](./docs/zh/reports/phase1_local_llm_eval_report.md) · [Stage 2 验收](./docs/zh/reports/stage2_acceptance_criteria.md) · [Stage 3 验收](./docs/zh/reports/stage3_acceptance_criteria.md) · [Stage 4 验收](./docs/zh/reports/stage4_acceptance_criteria.md)

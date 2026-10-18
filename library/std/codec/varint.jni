@@ -1,0 +1,94 @@
+# `std::codec::varint` — LEB128 Varint & ZigZag Streaming Codec (`VarintStream`)
+
+## 1. Architectural Intent & Rust `prost::encoding::varint` Comparison
+In Rust (`prost::encoding`), LEB128 varint encoding and decoding operate over `bytes::Buf` / `BufMut` trait slices where malformed continuation bits (`>= 0x80` across >10 bytes) or premature buffer truncation require manual loop guards.
+
+In Jenny's `std::codec::varint`, `VarintStream` is backed by `std::mem::raw_buf::RawBuf` and enforces `self.read_off >= 0 && self.read_off <= self.write_off && self.write_off <= self.buf.cap`, providing verified 7-bit continuation-byte LEB128 `encode_u64` / `decode_u64` and bijective `zigzag_encode` / `zigzag_decode`.
+
+```jenny
+module std_codec_varint
+
+import std::mem::raw_buf
+
+pub enum CodecError {
+    UnexpectedEof,
+    VarintOverflow,
+    NegativeUnsigned,
+    CapacityOverflow,
+}
+
+pub struct VarintStream {
+    buf: RawBuf,
+    read_off: i64 = 0,
+    write_off: i64 = 0,
+
+    invariant self.read_off >= 0 && self.read_off <= self.write_off && self.write_off <= self.buf.cap
+}
+
+pub fn zigzag_encode(val: i64) -> i64
+    effects []
+    ensures result >= 0
+
+pub fn zigzag_decode(encoded: i64) -> i64 ! CodecError
+    effects []
+    requires encoded >= 0 else CodecError.NegativeUnsigned
+
+impl VarintStream {
+    pub fn with_capacity(cap: i64) -> VarintStream ! CodecError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else CodecError.CapacityOverflow
+        ensures result.read_off == 0 && result.write_off == 0 && result.buf.cap == cap
+
+    pub fn unread_bytes(self) -> i64
+        effects []
+        ensures result == self.write_off - self.read_off && result >= 0
+
+    pub fn encode_u64(mut self, val: i64) -> i64 ! CodecError
+        effects [Mutate, AllocNative]
+        requires val >= 0 else CodecError.NegativeUnsigned
+        requires self.write_off + 10 <= 1048576 else CodecError.CapacityOverflow
+        ensures self.write_off > old(self.write_off) && result == self.write_off - old(self.write_off)
+
+    pub fn decode_u64(mut self) -> i64 ! CodecError
+        effects [Mutate]
+        requires self.read_off < self.write_off else CodecError.UnexpectedEof
+        ensures self.read_off > old(self.read_off) && result >= 0
+
+    pub fn drop_stream(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.read_off == 0 && self.write_off == 0 && self.buf.cap == 0 && result == 0
+}
+
+@example("EX-STD-VARINT-01: VarintStream LEB128 multi-byte roundtrip and ZigZag signed bijection") {
+    assert(zigzag_encode(0) == 0)
+    assert(zigzag_encode(-1) == 1)
+    assert(zigzag_encode(1) == 2)
+    assert(zigzag_encode(-2) == 3)
+    assert(zigzag_decode(3)! == -2)
+    var s = VarintStream.with_capacity(8)!
+    assert(s.encode_u64(127)! == 1)
+    assert(s.encode_u64(128)! == 2)
+    assert(s.encode_u64(300)! == 2)
+    assert(s.encode_u64(16384)! == 3)
+    assert(s.unread_bytes() == 8)
+    assert(s.decode_u64()! == 127)
+    assert(s.decode_u64()! == 128)
+    assert(s.decode_u64()! == 300)
+    assert(s.decode_u64()! == 16384)
+    assert(s.unread_bytes() == 0)
+    s.drop_stream()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-VARINT-02: VarintStream rejects negative input and decoding on empty stream") {
+    var s = VarintStream.with_capacity(4)!
+    val e1 = s.decode_u64()
+    assert(e1 is Err(CodecError.UnexpectedEof))
+    val e2 = s.encode_u64(-10)
+    assert(e2 is Err(CodecError.NegativeUnsigned))
+    val e3 = zigzag_decode(-1)
+    assert(e3 is Err(CodecError.NegativeUnsigned))
+    s.drop_stream()
+    assert(active_native_boxes() == 0)
+}
+```

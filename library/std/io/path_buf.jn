@@ -1,0 +1,45 @@
+module std_io_path_buf
+
+import std::mem::raw_buf
+
+impl PathBuf {
+    pub fn new(is_abs: i64) -> PathBuf ! PathError {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return PathBuf { buf: b, depth: 0, is_abs: is_abs }
+    }
+
+    pub fn depth(self) -> i64 {
+        return self.depth
+    }
+
+    pub fn push_segment(mut self, seg_id: i64) -> i64 ! PathError {
+        if self.depth == self.buf.cap {
+            self.buf.grow(self.depth + 1)?
+        }
+        self.buf.write_at(self.depth, seg_id)?
+        self.depth += 1
+        return self.depth
+    }
+
+    pub fn pop_segment(mut self) -> i64 ! PathError {
+        self.depth -= 1
+        val v = self.buf.read_at(self.depth)?
+        return v
+    }
+
+    pub fn normalize_parent(mut self) -> i64 ! PathError {
+        self.depth -= 1
+        return self.depth
+    }
+
+    pub fn leaf_segment(self) -> i64 ! PathError {
+        val v = self.buf.read_at(self.depth - 1)?
+        return v
+    }
+
+    pub fn drop_path(mut self) -> i64 {
+        self.buf.release()
+        self.depth = 0
+        return 0
+    }
+}

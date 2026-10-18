@@ -145,7 +145,10 @@ def call_ollama(prompt: str, model: str, endpoint: str) -> Tuple[str, float, flo
     return data.get("response", ""), round(elapsed, 2), round(tps, 1)
 
 
-def build_round1_prompt(syntax_card: str, jni_text: str, skeleton: str, module_name: str) -> str:
+def build_round1_prompt(
+    syntax_card: str, jni_text: str, skeleton: str, module_name: str, blind_mode: bool = True
+) -> str:
+    visible_jni = jenny_flow.strip_jenny_test_for_agent(jni_text) if blind_mode else jni_text
     return f"""You are an expert developer in the Spinning Jenny (`Jenny` v2.0) programming language.
 Read the Jenny v2.0 Syntax Card below carefully and strictly follow every rule:
 
@@ -157,11 +160,11 @@ CRITICAL RULES FOR `.jn` IMPLEMENTATION FILES:
 3. Do NOT re-declare `struct` or `enum` types, and do NOT write `requires` or `ensures` in `.jn`.
 4. NEVER use `&self`, `&mut self`, `&T`, `&mut T`, or `let`. Use `self`, `mut self`, `val`, and `var`.
 5. Every non-void `pub fn` MUST use explicit `return expr`.
-6. Pay close attention to the `@example` tests and `ensures` contracts in the `.jni` blueprint!
+6. Pay close attention to the Markdown design specification and the formal `requires` / `ensures` / `invariant` contracts in `jenny_decl`! (Note: `jenny_test` is withheld in blind evaluation mode—implement the general algorithm, never hardcode test literals.)
 
-### `.jni` Literate Contract Blueprint for `{module_name}`:
+### `.jni` Literate Contract Blueprint (`jenny_decl`) for `{module_name}`:
 ```markdown
-{jni_text}
+{visible_jni}
 ```
 
 ### Compiler-Generated `.jn` Skeleton (`jenny skeleton`):
@@ -179,7 +182,9 @@ def build_self_heal_prompt(
     skeleton: str,
     prev_jn: str,
     eval_result: Dict,
+    blind_mode: bool = True,
 ) -> str:
+    visible_jni = jenny_flow.strip_jenny_test_for_agent(jni_text) if blind_mode else jni_text
     diags = eval_result.get("ai_diagnostics", [])
     compile_err = eval_result.get("compile_stderr", "")
     failed_examples = [
@@ -212,9 +217,14 @@ def build_self_heal_prompt(
                 "3. CRITICAL CONTRACT / ASSERTION VIOLATIONS TO FIX:\n"
                 + "\n".join(contract_alerts)
             )
+        shown_examples = (
+            jenny_flow.desensitize_failed_examples(failed_examples, jni_text)
+            if blind_mode
+            else failed_examples
+        )
         feedback_parts.append(
-            "4. Failed `@example` Sandbox Execution Details:\n"
-            + json.dumps(failed_examples, indent=2, ensure_ascii=False)
+            "4. Desensitized Sandbox Verification Feedback (Test Literals Redacted):\n"
+            + json.dumps(shown_examples, indent=2, ensure_ascii=False)
         )
     feedback_str = "\n\n".join(feedback_parts)
 
@@ -225,9 +235,9 @@ def build_self_heal_prompt(
 
 {syntax_card}
 
-### Blueprint (`.jni`):
+### Blueprint (`jenny_decl`):
 ```markdown
-{jni_text}
+{visible_jni}
 ```
 
 ### Required `.jn` Function Skeleton (`jenny skeleton`):
@@ -245,6 +255,34 @@ Fix ALL errors above:
 - Never use `&self`, `&mut self`, `&T`, `&mut T`, or `let` (use `self`, `mut self`, `val`, `var`).
 - Apply every `suggested_replacement` from `--ai-json` diagnostics!
 Output ONLY the corrected `.jn` code inside a ```jenny ... ``` block:
+"""
+
+
+def build_architect_audit_prompt(
+    jni_text: str,
+    last_failed_jn: str,
+    static_audit: Dict,
+) -> str:
+    return f"""You are the Lead Architect Agent for the Spinning Jenny (`Jenny` v2.0) programming language.
+The Code Agent failed all 3 blind implementation & self-healing rounds (`Heal@3` exhausted).
+Unlike the Code Agent (which was blind to `jenny_test`), you have FULL privileged access to both `jenny_decl` and `jenny_test`.
+
+### Static Root-Cause Pre-Audit:
+{json.dumps(static_audit, indent=2, ensure_ascii=False)}
+
+### Complete `.jni` Blueprint (`jenny_decl` + `jenny_test`):
+```markdown
+{jni_text}
+```
+
+### Code Agent's Final Failed `.jn` Implementation (Round 3):
+```jenny
+{last_failed_jn}
+```
+
+Provide a concise 2-sentence root-cause diagnosis explaining:
+1. Why the Code Agent failed (confirming whether it is `{static_audit.get('root_cause_category')}`), and
+2. The exact algorithmic or contract fix required (without telling the Code Agent to hardcode test literals).
 """
 
 
@@ -275,9 +313,17 @@ def evaluate_benchmark_with_ollama(
     model: str,
     endpoint: str,
     max_rounds: int = 3,
+    blind_mode: bool = True,
+    architect_model: Optional[str] = None,
 ) -> Dict:
     jni_file = next(bench_dir.glob("*.jni"))
+    jn_file = next(bench_dir.glob("*.jn"))
     jni_text = jni_file.read_text(encoding="utf-8")
+    golden_jn_text = jn_file.read_text(encoding="utf-8") if jn_file.exists() else None
+    blind_jni_text = jenny_flow.strip_jenny_test_for_agent(jni_text)
+    full_jni_tokens = measure_tokens.count_code_tokens(jni_text)
+    blind_jni_tokens = measure_tokens.count_code_tokens(blind_jni_text)
+
     ast_for_skel = jenny_flow.parse_jni_blueprint(jni_text)
     skeleton = jenny_flow.generate_jn_skeleton(ast_for_skel)
     rounds_log: List[Dict] = []
@@ -287,10 +333,17 @@ def evaluate_benchmark_with_ollama(
 
     for r_idx in range(1, max_rounds + 1):
         if r_idx == 1:
-            prompt = build_round1_prompt(syntax_card, jni_text, skeleton, bench_dir.name)
+            prompt = build_round1_prompt(
+                syntax_card, jni_text, skeleton, bench_dir.name, blind_mode=blind_mode
+            )
         else:
             prompt = build_self_heal_prompt(
-                syntax_card, jni_text, skeleton, current_jn, rounds_log[-1]["eval_result"]
+                syntax_card,
+                jni_text,
+                skeleton,
+                current_jn,
+                rounds_log[-1]["eval_result"],
+                blind_mode=blind_mode,
             )
 
         raw_resp, elapsed_s, tps = call_ollama(prompt, model, endpoint)
@@ -353,16 +406,53 @@ def evaluate_benchmark_with_ollama(
             passed_at_round = r_idx
             break
 
+    # Fallback Strategy: If all 3 repair rounds fail (`passed_at_round is None`),
+    # trigger the Architect Agent Root-Cause Audit with full `.jni` (`jenny_decl` + `jenny_test`) visibility!
+    architect_audit: Optional[Dict] = None
+    if passed_at_round is None:
+        audit_input_history = [
+            {
+                "round": r["round"],
+                "jn_code": r["generated_jn"],
+                "failure_reasons": r["failure_tags"],
+                "ai_diagnostics": r["eval_result"]["ai_diagnostics"],
+                "compile_stderr": r["eval_result"]["compile_stderr"],
+                "examples": r["eval_result"]["examples"],
+            }
+            for r in rounds_log
+        ]
+        architect_audit = jenny_flow.run_architect_root_cause_audit(
+            jni_text, ast_for_skel, audit_input_history, golden_jn_text=golden_jn_text
+        )
+        arch_model_name = architect_model or model
+        try:
+            arch_prompt = build_architect_audit_prompt(
+                jni_text, current_jn, architect_audit
+            )
+            arch_resp, arch_sec, _ = call_ollama(arch_prompt, arch_model_name, endpoint)
+            architect_audit["architect_model"] = arch_model_name
+            architect_audit["architect_llm_diagnosis"] = arch_resp.strip()
+            architect_audit["audit_elapsed_sec"] = arch_sec
+        except Exception as exc:
+            architect_audit["architect_llm_diagnosis"] = f"Static audit completed ({exc})"
+
     # Always restore the canonical `.jn` C99 build after evaluating
     jenny_flow.compile_and_run_benchmark(bench_dir)
 
     return {
         "benchmark": bench_dir.name,
+        "blind_mode": blind_mode,
+        "full_jni_tokens": full_jni_tokens,
+        "blind_jni_tokens": blind_jni_tokens,
+        "prompt_jni_token_reduction_pct": round(
+            (1.0 - blind_jni_tokens / max(1, full_jni_tokens)) * 100.0, 1
+        ),
         "passed_at_round": passed_at_round,
         "pass_at_1": passed_at_round == 1,
         "heal_at_2": passed_at_round is not None and passed_at_round <= 2,
         "heal_at_3": passed_at_round is not None and passed_at_round <= 3,
         "round1_failure_tags": round1_errors,
+        "architect_root_cause_audit": architect_audit,
         "rounds": rounds_log,
     }
 
@@ -423,8 +513,49 @@ def run_mock_self_heal_suite() -> Dict:
             }
         )
 
+    # 4. Verify Blind-Test Stripping & E0905 Anti-Overfitting Audit
+    b01_jni = (b01_dir / "ring_buffer.jni").read_text(encoding="utf-8")
+    blind_b01_jni = jenny_flow.strip_jenny_test_for_agent(b01_jni)
+    cheating_jn = b01_clean.replace(
+        "return self.len == self.capacity",
+        "if self.len == 999 { return true }\n        return self.len == self.capacity",
+    )
+    overfit_res = jenny_flow.compile_and_run_benchmark(b01_dir, custom_jn_text=cheating_jn)
+    jenny_flow.compile_and_run_benchmark(b01_dir)
+    overfit_caught = any(
+        d["code"] == "E0905_TEST_LITERAL_OVERFITTING"
+        for d in overfit_res.get("ai_diagnostics", [])
+    )
+
+    # 5. Verify Heal@3 Exhausted -> Architect Root-Cause Audit Fallback (RC1 / RC2 / RC3)
+    b01_ast = jenny_flow.parse_jni_blueprint(b01_jni)
+    broken_jn = b01_clean.replace("self.len += 1", "// forgot to increment len")
+    broken_eval = jenny_flow.compile_and_run_benchmark(b01_dir, custom_jn_text=broken_jn)
+    jenny_flow.compile_and_run_benchmark(b01_dir)
+    mock_3_rounds = [
+        {
+            "round": r,
+            "jn_code": broken_jn,
+            "failure_reasons": classify_failure_reasons(broken_eval, broken_jn),
+            "ai_diagnostics": broken_eval.get("ai_diagnostics", []),
+            "compile_stderr": broken_eval.get("compile_stderr", ""),
+            "examples": broken_eval.get("examples", []),
+        }
+        for r in (1, 2, 3)
+    ]
+    architect_report = jenny_flow.run_architect_root_cause_audit(
+        b01_jni, b01_ast, mock_3_rounds, golden_jn_text=b01_clean
+    )
+
     return {
         "all_healed_at_round2": all(c["round2_healed_ok"] for c in cases_report),
+        "blind_test_stripped_cleanly": "@example" not in blind_b01_jni and "jenny_test" not in blind_b01_jni,
+        "e0905_overfitting_caught": overfit_caught,
+        "architect_audit_fallback_verified": (
+            architect_report["root_cause_category"] == "RC3_ALGORITHMIC_BOTTLENECK"
+            and bool(architect_report.get("algorithmic_prescription"))
+        ),
+        "architect_sample_report": architect_report,
         "cases": cases_report,
     }
 
@@ -446,6 +577,7 @@ def main():
     parser = argparse.ArgumentParser(description="Jenny LLM Evaluation & Self-Healing Harness")
     parser.add_argument("--provider", choices=["mock", "ollama"], default="mock")
     parser.add_argument("--model", default="qwen2.5-coder:3b")
+    parser.add_argument("--architect-model", default=None, help="Model for Architect Root-Cause Audit when Heal@3 fails")
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434/api/generate")
     parser.add_argument(
         "--benchmarks",
@@ -454,11 +586,17 @@ def main():
         help="Optional benchmark prefixes to evaluate (e.g., B01 B04 B05 B06 B11 B12)",
     )
     parser.add_argument("--max-rounds", type=int, default=3)
+    parser.add_argument(
+        "--allow-test-peek",
+        action="store_true",
+        help="Disable default blind-test isolation (for ablation studies only)",
+    )
     parser.add_argument("--output-json", default=None)
     args = parser.parse_args()
 
     card_text = SYNTAX_CARD_PATH.read_text(encoding="utf-8")
     card_tokens = measure_tokens.count_code_tokens(card_text)
+    blind_mode = not args.allow_test_peek
 
     if args.provider == "mock":
         heal_report = run_mock_self_heal_suite()
@@ -466,21 +604,37 @@ def main():
             "syntax_card_path": str(SYNTAX_CARD_PATH.relative_to(ROOT_DIR)),
             "syntax_card_tokens": card_tokens,
             "syntax_card_within_400_budget": card_tokens <= 400,
-            "mode": "mock_self_heal_verification",
+            "mode": "mock_self_heal_and_blind_audit_verification",
             "self_heal_suite": heal_report,
         }
     else:
         target_dirs = get_target_benchmarks(args.benchmarks)
         results = []
         heatmap: Dict[str, int] = {}
+        architect_audits: List[Dict] = []
         for bdir in target_dirs:
-            sys.stderr.write(f"[Ollama:{args.model}] Evaluating {bdir.name}...\n")
+            sys.stderr.write(
+                f"[Ollama:{args.model} | Blind={blind_mode}] Evaluating {bdir.name}...\n"
+            )
             res = evaluate_benchmark_with_ollama(
-                bdir, card_text, args.model, args.endpoint, max_rounds=args.max_rounds
+                bdir,
+                card_text,
+                args.model,
+                args.endpoint,
+                max_rounds=args.max_rounds,
+                blind_mode=blind_mode,
+                architect_model=args.architect_model,
             )
             results.append(res)
             for tag in res["round1_failure_tags"]:
                 heatmap[tag] = heatmap.get(tag, 0) + 1
+            if res.get("architect_root_cause_audit"):
+                architect_audits.append(
+                    {
+                        "benchmark": bdir.name,
+                        **res["architect_root_cause_audit"],
+                    }
+                )
 
         total = len(results)
         p1 = sum(1 for r in results if r["pass_at_1"])
@@ -489,9 +643,14 @@ def main():
         avg_tps = round(
             sum(r["rounds"][0]["tokens_per_sec"] for r in results) / max(1, total), 1
         )
+        avg_tok_red = round(
+            sum(r["prompt_jni_token_reduction_pct"] for r in results) / max(1, total), 1
+        )
         out = {
             "provider": "ollama",
             "model": args.model,
+            "blind_mode": blind_mode,
+            "avg_prompt_jni_token_reduction_pct": avg_tok_red,
             "syntax_card_tokens": card_tokens,
             "total_benchmarks": total,
             "pass_at_1_count": p1,
@@ -500,6 +659,8 @@ def main():
             "heal_at_2_rate": round(h2 / max(1, total), 4),
             "heal_at_3_count": h3,
             "heal_at_3_rate": round(h3 / max(1, total), 4),
+            "architect_audit_triggered_count": len(architect_audits),
+            "architect_root_cause_audits": architect_audits,
             "avg_tokens_per_sec": avg_tps,
             "round1_error_heatmap": heatmap,
             "benchmarks": results,

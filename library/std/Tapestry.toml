@@ -1,0 +1,28 @@
+[package]
+name = "std"
+version = "0.2.0-alpha2"
+edition = "2.0"
+blueprint = "pkg.jni"
+description = "Spinning Jenny Standard Library (v0.2-alpha2: std::{rt, ffi, mem, collections, str, io, codec})"
+
+# Supply-Chain Capability Sandboxing (Spec Module 12 §3)
+# All 15 core std modules are strictly white-box blueprints (0 black-box `import c "header.h"`,
+# 0 File/Network IO, 0 OS Process spawning, 0 Environment access).
+allow_effects = []
+
+[modules]
+"std::rt::intrinsics"         = { jni = "rt/intrinsics.jni",         jn = "rt/intrinsics.jn",         rs = "rt/intrinsics.rs" }
+"std::ffi::c_abi"             = { jni = "ffi/c_abi.jni",             jn = "ffi/c_abi.jn",             rs = "ffi/c_abi.rs" }
+"std::mem::raw_buf"           = { jni = "mem/raw_buf.jni",           jn = "mem/raw_buf.jn",           rs = "mem/raw_buf.rs" }
+"std::mem::arena"             = { jni = "mem/arena.jni",             jn = "mem/arena.jn",             rs = "mem/arena.rs" }
+"std::collections::vec"       = { jni = "collections/vec.jni",       jn = "collections/vec.jn",       rs = "collections/vec.rs" }
+"std::collections::vec_deque" = { jni = "collections/vec_deque.jni", jn = "collections/vec_deque.jn", rs = "collections/vec_deque.rs" }
+"std::collections::hash_map"  = { jni = "collections/hash_map.jni",  jn = "collections/hash_map.jn",  rs = "collections/hash_map.rs" }
+"std::collections::lru_cache" = { jni = "collections/lru_cache.jni", jn = "collections/lru_cache.jn", rs = "collections/lru_cache.rs" }
+"std::str::str_view"          = { jni = "str/str_view.jni",          jn = "str/str_view.jn",          rs = "str/str_view.rs" }
+"std::str::string_buf"        = { jni = "str/string_buf.jni",        jn = "str/string_buf.jn",        rs = "str/string_buf.rs" }
+"std::str::fmt"               = { jni = "str/fmt.jni",               jn = "str/fmt.jn",               rs = "str/fmt.rs" }
+"std::io::cursor"             = { jni = "io/cursor.jni",             jn = "io/cursor.jn",             rs = "io/cursor.rs" }
+"std::io::buf_io"             = { jni = "io/buf_io.jni",             jn = "io/buf_io.jn",             rs = "io/buf_io.rs" }
+"std::io::path_buf"           = { jni = "io/path_buf.jni",           jn = "io/path_buf.jn",           rs = "io/path_buf.rs" }
+"std::codec::varint"          = { jni = "codec/varint.jni",          jn = "codec/varint.jn",          rs = "codec/varint.rs" }

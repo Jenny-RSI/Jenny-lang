@@ -1,0 +1,90 @@
+# `std::io::buf_io` — Buffered Stream Channel (`BufChannel` / `BufReader` + `BufWriter`)
+
+## 1. Architectural Intent & Rust `std::io::{BufReader, BufWriter}` Comparison
+In Rust (`std::io::BufReader` and `BufWriter`), internal buffer watermarks (`pos` and `filled`) are private fields maintained via manual `consume(amt)` and `fill_buf()` calls, where off-by-one watermark updates can corrupt stream framing.
+
+In Jenny's `std::io::buf_io`, `BufChannel` unifies buffered framing atop `std::mem::raw_buf::RawBuf` and enforces the structural invariant `self.read_pos >= 0 && self.read_pos <= self.write_pos && self.write_pos <= self.buf.cap && self.flushed_count >= 0`, with `compact()` shifting unread frames to offset `0` via `RawBuf.copy_within`.
+
+```jenny
+module std_io_buf_io
+
+import std::mem::raw_buf
+
+pub enum BufIoError {
+    BufferUnderflow,
+    CapacityOverflow,
+    InvalidFrame,
+}
+
+pub struct BufChannel {
+    buf: RawBuf,
+    read_pos: i64 = 0,
+    write_pos: i64 = 0,
+    flushed_count: i64 = 0,
+
+    invariant self.read_pos >= 0 && self.read_pos <= self.write_pos && self.write_pos <= self.buf.cap && self.flushed_count >= 0
+}
+
+impl BufChannel {
+    pub fn with_capacity(cap: i64) -> BufChannel ! BufIoError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else BufIoError.CapacityOverflow
+        ensures result.read_pos == 0 && result.write_pos == 0 && result.buf.cap == cap
+
+    pub fn unread_len(self) -> i64
+        effects []
+        ensures result == self.write_pos - self.read_pos && result >= 0
+
+    pub fn write_frame(mut self, payload: i64) -> i64 ! BufIoError
+        effects [Mutate, AllocNative]
+        requires self.write_pos < 1048576 else BufIoError.CapacityOverflow
+        ensures self.write_pos == old(self.write_pos) + 1 && result == self.write_pos - self.read_pos
+
+    pub fn read_frame(mut self) -> i64 ! BufIoError
+        effects [Mutate]
+        requires self.read_pos < self.write_pos else BufIoError.BufferUnderflow
+        ensures self.read_pos == old(self.read_pos) + 1
+
+    pub fn compact(mut self) -> i64 ! BufIoError
+        effects [Mutate]
+        ensures self.read_pos == 0 && self.write_pos == old(self.write_pos) - old(self.read_pos) && result == self.write_pos
+
+    pub fn flush_all(mut self) -> i64
+        effects [Mutate]
+        ensures self.read_pos == 0 && self.write_pos == 0 && self.flushed_count == old(self.flushed_count) + (old(self.write_pos) - old(self.read_pos)) && result == self.flushed_count
+
+    pub fn drop_channel(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.read_pos == 0 && self.write_pos == 0 && self.buf.cap == 0 && result == 0
+}
+
+@example("EX-STD-BUFIO-01: BufChannel write_frame, read_frame, compact shift, flush_all, and drop") {
+    var ch = BufChannel.with_capacity(4)!
+    ch.write_frame(100)!
+    ch.write_frame(200)!
+    ch.write_frame(300)!
+    assert(ch.read_frame()! == 100)
+    assert(ch.unread_len() == 2)
+    val rem = ch.compact()!
+    assert(rem == 2)
+    assert(ch.read_pos == 0)
+    assert(ch.write_pos == 2)
+    assert(ch.read_frame()! == 200)
+    assert(ch.flush_all() == 1)
+    assert(ch.unread_len() == 0)
+    ch.drop_channel()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-BUFIO-02: BufChannel rejects underflow read on empty channel") {
+    var ch = BufChannel.with_capacity(2)!
+    val e1 = ch.read_frame()
+    assert(e1 is Err(BufIoError.BufferUnderflow))
+    ch.write_frame(55)!
+    assert(ch.read_frame()! == 55)
+    val e2 = ch.read_frame()
+    assert(e2 is Err(BufIoError.BufferUnderflow))
+    ch.drop_channel()
+    assert(active_native_boxes() == 0)
+}
+```

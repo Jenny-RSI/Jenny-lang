@@ -1,0 +1,181 @@
+module std_collections_hash_map
+
+import std::mem::raw_buf
+
+impl HashMap {
+    pub fn new() -> HashMap {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return HashMap { buf: b, cap: 0, len: 0, tombstones: 0 }
+    }
+
+    pub fn with_capacity(initial_cap: i64) -> HashMap ! MapError {
+        val b = RawBuf.new(initial_cap * 3)?
+        return HashMap { buf: b, cap: initial_cap, len: 0, tombstones: 0 }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.cap
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.len == 0
+    }
+
+    pub fn rehash_to(mut self, new_cap: i64) -> i64 ! MapError {
+        var new_buf = RawBuf.new(new_cap * 3)?
+        var b = 0
+        while b < self.cap {
+            val st = self.buf.read_at(b * 3)?
+            if st == 1 {
+                val k = self.buf.read_at(b * 3 + 1)?
+                val v = self.buf.read_at(b * 3 + 2)?
+                var idx = ((k * 1103515245 + 12345) % new_cap + new_cap) % new_cap
+                var placed = 0
+                while placed == 0 {
+                    val dst_st = new_buf.read_at(idx * 3)?
+                    if dst_st == 0 {
+                        new_buf.write_at(idx * 3, 1)?
+                        new_buf.write_at(idx * 3 + 1, k)?
+                        new_buf.write_at(idx * 3 + 2, v)?
+                        placed = 1
+                    } else {
+                        idx = (idx + 1) % new_cap
+                    }
+                }
+            }
+            b += 1
+        }
+        self.buf.release()
+        self.buf = new_buf
+        self.cap = new_cap
+        self.tombstones = 0
+        return self.cap
+    }
+
+    pub fn insert(mut self, key: i64, val: i64) -> i64 ! MapError {
+        if (self.len + self.tombstones + 1) * 4 > self.cap * 3 {
+            val next_cap = if self.cap < 8 { 8 } else { self.cap * 2 }
+            self.rehash_to(next_cap)?
+        }
+        var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap
+        var first_tomb = -1
+        var steps = 0
+        while steps < self.cap {
+            val st = self.buf.read_at(idx * 3)?
+            if st == 0 {
+                val target = if first_tomb >= 0 { first_tomb } else { idx }
+                if first_tomb >= 0 {
+                    self.tombstones -= 1
+                }
+                self.buf.write_at(target * 3, 1)?
+                self.buf.write_at(target * 3 + 1, key)?
+                self.buf.write_at(target * 3 + 2, val)?
+                self.len += 1
+                return self.len
+            }
+            if st == 1 {
+                val cur_k = self.buf.read_at(idx * 3 + 1)?
+                if cur_k == key {
+                    self.buf.write_at(idx * 3 + 2, val)?
+                    return self.len
+                }
+            } else {
+                if first_tomb < 0 {
+                    first_tomb = idx
+                }
+            }
+            idx = (idx + 1) % self.cap
+            steps += 1
+        }
+        if first_tomb >= 0 {
+            self.tombstones -= 1
+            self.buf.write_at(first_tomb * 3, 1)?
+            self.buf.write_at(first_tomb * 3 + 1, key)?
+            self.buf.write_at(first_tomb * 3 + 2, val)?
+            self.len += 1
+            return self.len
+        }
+        raise MapError.CapacityOverflow
+    }
+
+    pub fn get(self, key: i64) -> i64 ! MapError {
+        guard self.cap > 0 && self.len > 0 else { raise MapError.KeyNotFound }
+        var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap
+        var steps = 0
+        while steps < self.cap {
+            val st = self.buf.read_at(idx * 3)?
+            if st == 0 {
+                raise MapError.KeyNotFound
+            }
+            if st == 1 {
+                val cur_k = self.buf.read_at(idx * 3 + 1)?
+                if cur_k == key {
+                    val v = self.buf.read_at(idx * 3 + 2)?
+                    return v
+                }
+            }
+            idx = (idx + 1) % self.cap
+            steps += 1
+        }
+        raise MapError.KeyNotFound
+    }
+
+    pub fn contains_key(self, key: i64) -> bool {
+        if self.cap == 0 || self.len == 0 {
+            return false
+        }
+        var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap
+        var steps = 0
+        while steps < self.cap {
+            val st = self.buf.read_at(idx * 3)!
+            if st == 0 {
+                return false
+            }
+            if st == 1 {
+                val cur_k = self.buf.read_at(idx * 3 + 1)!
+                if cur_k == key {
+                    return true
+                }
+            }
+            idx = (idx + 1) % self.cap
+            steps += 1
+        }
+        return false
+    }
+
+    pub fn remove(mut self, key: i64) -> i64 ! MapError {
+        var idx = ((key * 1103515245 + 12345) % self.cap + self.cap) % self.cap
+        var steps = 0
+        while steps < self.cap {
+            val st = self.buf.read_at(idx * 3)?
+            if st == 0 {
+                raise MapError.KeyNotFound
+            }
+            if st == 1 {
+                val cur_k = self.buf.read_at(idx * 3 + 1)?
+                if cur_k == key {
+                    val removed_v = self.buf.read_at(idx * 3 + 2)?
+                    self.buf.write_at(idx * 3, 2)?
+                    self.len -= 1
+                    self.tombstones += 1
+                    return removed_v
+                }
+            }
+            idx = (idx + 1) % self.cap
+            steps += 1
+        }
+        raise MapError.KeyNotFound
+    }
+
+    pub fn drop_map(mut self) -> i64 {
+        self.buf.release()
+        self.cap = 0
+        self.len = 0
+        self.tombstones = 0
+        return 0
+    }
+}

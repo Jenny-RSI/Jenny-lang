@@ -24,9 +24,11 @@
 在启动 `v0.2` 构建 `std::{mem, slice, collections, str, io}` 时，我们首先落地最核心的 **多模块白盒寻址与最小子图编译机制**，并在标准库实战中验证其上下文节省率（$\text{ECC}$）与编译隔离效果。
 
 ### 2.1 物理双文件配对法则（The `.jni` + `.jn` White-Box Pair）
-在任何 Jenny 包（`std` 或业务包）中，每个模块由同目录下同名的两个文件配对组成：
-* **`<mod_name>.jni`（白盒意图与契约蓝图，必需）**：人类与外部模块唯一可见的门面。包含 Markdown 架构意图说明以及 ```` ```jenny ```` 块中的 `pub struct`/`enum`/`trait`、`pub fn` 签名、`effects [...]`、`requires`、`ensures(old)`、`invariant` 与 `@example`。
-* **`<mod_name>.jn`（幕后实现单元，对外部模块物理不可见）**：仅包含函数体实现、模块私有辅助函数与 `@spin` 展开指令。
+在任何 Jenny 包（`std` 或业务包）中，每个模块由同目录下同名的两个文件（全小写 `snake_case`，保证跨 Windows/macOS/Linux 文件系统 100% 大小写无歧义）配对组成：
+* **`<mod_name>.jni`（白盒意图与双区契约蓝图，必需）**：人类与外部模块唯一可见的门面，内部拆分为两个正交围栏章节：
+  1. **第一章 ```` ```jenny_decl ````（纯声明与契约区）**：仅包含 `module`、`import`、`pub import`、`pub error`/`enum`/`struct`/`trait`、`pub fn` 签名、`effects [...]`、`requires`、`ensures(old)` 与 `invariant`。**`jni_abi_hash` 与 `spindle context` 仅作用于 `jenny_decl`**！
+  2. **第二章 ```` ```jenny_test ````（验收与测试区）**：包含单行极简断言（`<expr> => <expected>` / `<expr> => err(...)`）与多行有状态测试块（`test "<描述>" { ... }`），仅在测试/验收模式下编译执行，生产构建与 `.jnast` 归档 100% 剥离。
+* **`<mod_name>.jn`（幕后实现单元，对外部模块物理不可见）**：仅包含公开函数的函数体实现、**模块内私有辅助函数（无修饰符 `fn`，禁止出现在 `.jni` 中）** 与 `@spin` 展开指令。
 
 ### 2.2 标准库与工程目录拓扑 (`std/` 实战布局)
 
@@ -35,13 +37,15 @@ jenny_workspace/
 ├── Tapestry.toml                  # 工程挂毯配置清单
 ├── Tapestry.lock                  # 白盒契约哈希与模块级依赖锁定文件
 ├── std/                           # 官方标准库包 (package = "std")
-│   ├── pkg.jni                    # 包级门面蓝图 (聚合重导出核心子模块)
+│   ├── pkg.jni                    # 包级门面蓝图 (通过 pub import 聚合重导出核心符号)
 │   ├── mem/
-│   │   ├── raw_buf.jni            # 模块路径: std::mem::raw_buf (仅依赖 jenny_rt.h)
+│   │   ├── mod.jni                # 子域门面蓝图 (pub import 重导出 RawBuf, Arena)
+│   │   ├── raw_buf.jni            # 模块路径: std::mem::raw_buf (仅依赖 std::rt::intrinsics)
 │   │   ├── raw_buf.jn
 │   │   ├── arena.jni              # 模块路径: std::mem::arena
 │   │   └── arena.jn
 │   ├── collections/
+│   │   ├── mod.jni                # 子域门面蓝图 (pub import 重导出 Vec, VecDeque, HashMap, LruCache)
 │   │   ├── vec.jni                # 模块路径: std::collections::vec (import std::mem::raw_buf)
 │   │   ├── vec.jn
 │   │   ├── vec_deque.jni          # 模块路径: std::collections::vec_deque
@@ -61,21 +65,36 @@ jenny_workspace/
 └── .jenny-cache/                  # 模块级细粒度 CAS 缓存 (c99/*.h, c99/*.c, obj/*.o, abi/*.json)
 ```
 
-### 2.3 显式导入语法与“模块级按需可达子图裁剪” (Lazy Subgraph Pruning)
+### 2.3 显式导入、`pub import` 门面重导出与“零成本按需符号穿透” (Zero-Cost Barrel Forwarding)
 1. **静态禁止通配符导入（`E0501_WILDCARD_IMPORT_FORBIDDEN`）**：
    * 仅允许显式符号导入或模块命名空间导入：
-     ```jenny
+     ```jenny_decl
      module std::collections::vec
 
-     import std::mem::raw_buf::{RawBuf, AllocError}
+     import std::mem::{RawBuf, AllocError}
      import std::mem::arena as mem_arena
      ```
-2. **告别“整包连坐”的按需子图解析算法**：
-   * 当编译目标模块 `M` 时，`spindle` 从 `M.jni` 和 `M.jn` 的 `import` 声明出发，仅按需加载被显式引用的上游 `<dep_mod>.jni` 文件（绝不扫描同一包内未被引用到的其他兄弟模块！）。
-   * **实战验证指标（在 `std` 上实测）**：若某程序仅 `import std::mem::arena::{Arena}`，编译器只解析 `arena.jni` 并链接 `arena.o`，`std::collections` 与 `std::io` 的编译耗时与二进制体积贡献严格为 **`0`**。
-3. **跨模块编译的物理白盒隔离（`.jni` Header Generation）**：
-   * 编译器将每个可达的 `<mod>.jni` 降级为独立的 C99 接口头文件 `.jenny-cache/c99/<pkg>__<mod>.h`（内含结构体布局、函数原型与 `jni_abi_hash` 常量断言）；
-   * 编译下游 `<consumer>.jn` 时，C99 后端仅 `#include "<pkg>__<mod>.h"`，从而在物理层面保证：**只要上游 `<mod>.jni` 的契约哈希未变，上游 `<mod>.jn` 内部实现怎么重构、哪怕替换整个底层算法，下游 `.o` 目标文件 100% 零重编！**
+2. **借鉴 JavaScript ES Modules 的 `pub import` 门面重导出（消除路径结巴）**：
+   * 物理文件保持一模块一文件的全小写命名（如 `std/collections/vec.jni` 定义 `pub struct Vec`），避免多类型拥挤或跨平台大小写冲突；
+   * 在子域门面 `std/collections/mod.jni` 或包根门面 `std/pkg.jni` 的 ```` ```jenny_decl ```` 块中，使用 **`pub import`** 显式重导出公开类型与函数：
+     ```jenny_decl
+     module std::collections
+
+     pub import std::collections::vec::{Vec, VecError}
+     pub import std::collections::vec_deque::{VecDeque}
+     pub import std::collections::hash_map::{HashMap}
+     pub import std::collections::lru_cache::{LruCache}
+     ```
+   * 下游调用方无需书写冗长结巴的 `import std::collections::vec::{Vec}`，直接书写干净的领域级导入：
+     ```jenny_decl
+     import std::collections::{Vec, HashMap}
+     ```
+3. **告别 JS Barrel File 体积膨胀的“零成本按需符号穿透”（Zero-Cost Barrel Forwarding）**：
+   * 在传统 JavaScript/TypeScript 中，通过 `index.ts` 重导出常导致打包器被迫解析整个目录下的所有文件；
+   * 而在 Jenny 中，由于严禁模块顶层存在副作用代码且 `pub import` 强制显式列出符号清单，当编译器看到 `import std::collections::{Vec}` 时，它在 `std/collections/mod.jni` 的符号映射表中查出 `Vec` 源自 `std::collections::vec`，**直接按需穿透并仅加载 `vec.jni` 的 `jenny_decl` 与 `vec.jn`**！同目录下的 `hash_map.jni` 与 `lru_cache.jni` **连打开都不会打开**（0 词法分析、0 编译耗时、0 效应传染、0 二进制体积）。
+4. **跨模块编译的物理白盒隔离（`.jni` `jenny_decl` Header Generation）**：
+   * 编译器仅提取每个可达 `<mod>.jni` 中的 ```` ```jenny_decl ```` 块，降级为独立的 C99 接口头文件 `.jenny-cache/c99/<pkg>__<mod>.h`（内含结构体布局、函数原型与 `jni_abi_hash` 常量断言）；
+   * 编译下游 `<consumer>.jn` 时，C99 后端仅 `#include "<pkg>__<mod>.h"`，从而在物理层面保证：**只要上游 `<mod>.jni` 的 `jenny_decl` 契约哈希未变，无论上游修改 `<mod>.jn` 内部实现、新增私有 `fn`，还是在 `<mod>.jni` 的 `jenny_test` 中增删测试用例，下游 `.o` 目标文件 100% 零重编！**
 
 ---
 
@@ -138,15 +157,36 @@ jenny_workspace/
    * 允许一个包仅发布共享的核心数据结构与 Trait 契约（如 `std::io::stream.jni`，拥有全局唯一的 `jni_abi_hash`），不同的底层实现包为该 `.jni` 提供各自的 `.jn` 实现。不同库之间只通过恒定的 `.jni` 契约类型通信，彻底消灭 Rust 中“因为底层依赖版本不同导致同名结构体类型不兼容”的顽疾。
 2. **纯 `.jni` 蓝图借阅模式 (`[blueprints]` —— 零外部运行时依赖)**：
    * 针对几十到几百行规模的通用算法或数据结构（如令牌桶限流器、重试状态机、布隆过滤器），开发者无需引入外部黑盒代码包，只需在 `Tapestry.toml` 的 `[blueprints]` 中引入社区经过千锤百炼的 **纯 `.jni` 契约与 `@example` 验收蓝图**，由本地编码模型直接按需合成并经编译器 100% 验真出本地 `.jn` 实现，彻底消灭 `left-pad` 式的微包供应链风险。
+3. **纯 `.jni` 蓝图门面发布与统一规范化 AST 归档库 (`spindle pack` & `spindle decompile`)**：
+   * **发布包不携带散落的 `.jn` 源码或 `.spun` 展开文件**：通过 `spindle pack` 打包发布的依赖包，其目录树仅暴露 `Tapestry.toml`、`Tapestry.lock`、**纯 `.jni` 文学化蓝图文件树**以及单个统一的**预编译规范化 AST 归档库 `lib/<pkg>.jnast`**。
+   * **三大核心收益**：
+     1. **视觉与 AI 上下文绝对纯净**：人类浏览依赖目录或 AI Agent 检索外部包时，100% 只接触高信息密度的 `.jni` 契约蓝图，绝不会被内部 `.jn` 实现文件污染上下文；
+     2. **跳过词法/语法分析的 $O(1)$ 按需 AST 加载与全局 `@spin` 去重**：`lib/<pkg>.jnast` 存储已校验、已归一化的函数与 `@spin` 模板 AST 节点（免疫空白符与注释变更），下游构建时无需重新 Lex/Parse 依赖包源码；所有 `@spin` 展开在工作区全局单态化池（`.jenny-cache/spin/`）中按实参类型签名统一生成并跨包去重；
+     3. **1:1 无损反编译 (`spindle decompile <module>`)**：由于规范化 AST 与 Jenny v2.0 `.jn` 语法构成严格双射，开发者或审计工具随时可执行 `spindle decompile std::str::fmt` 从 `lib/std.jnast` 毫秒级无损还原出标准 `.jn` 源代码。
 
 ---
 
-## 6. 包管理与模块解析静态诊断错误码 (`E0501` ~ `E0505`)
+## 6. Layer-0 运行时内建白盒边界 (`std::rt::intrinsics`)、C 库白盒桥接 (`std::ffi::c_abi` + `spindle bindgen-c`) 与静态诊断错误码 (`E0501` ~ `E0510`)
+
+为彻底消除“`.jn` 实现层直接调用底层 C 运行时 `jenny_rt.h` 宏/内建函数或直接引入黑盒 C 头文件 `import c "header.h"` 而缺乏 `.jni` 蓝图契约描述”的白盒盲区，Jenny 标准库确立了两大 Layer-0 白盒桥接铁律：
+1. **运行时内建原语白盒蓝图 (`std::rt::intrinsics`)**：
+   * 所有底层堆分配（`rt_raw_alloc` / `rt_raw_realloc` / `rt_raw_free` / `rt_raw_get` / `rt_raw_set` / `rt_raw_copy`）、栈帧暂存区（`rt_scratch_mark` / `rt_scratch_alloc` / `rt_scratch_release`）、格式化与 SSO 转换原语（`rt_raw_put_*` / `rt_raw_to_sso_string`）以及 Immix GC 纪元原语（`rt_gc_begin_mark` / `rt_gc_sweep_epoch`）均在 [`std/rt/intrinsics.jni`](../../../std/rt/intrinsics.jni) 中拥有完整的类型签名、`effects` 副作用标签、`requires` / `ensures` 契约与 `@example` 测试；
+   * 除 `std::rt::intrinsics` 自身外，任何模块若在 `.jn` 中绕过 `std::rt::intrinsics` 直接调用底层 `jn_raw_*` / `jn_scratch_*` C 宏，或未在 `.jni` 中显式声明 `import std::rt::intrinsics` 即调用 `rt_*` 原语，均会被 `Spindle` 静态拦截并抛出 **`E0510_UNDECLARED_RT_INTRINSIC`**。
+2. **外部 C 库白盒蓝图桥接 (`std::ffi::c_abi` & `spindle bindgen-c`)**：
+   * 禁止普通模块直接 `import c "header.h"` 引入黑盒 C 头文件（触发 `E0505_UNDECLARED_FFI_IMPORT`）；
+   * 外部 C 库必须先通过 AI + `spindle bindgen-c <header.h>` 提取为白盒 `.jni` 蓝图（如 [`std/ffi/c_abi.jni`](../../../std/ffi/c_abi.jni)），原生支持与 C 1:1 物理内存布局一致的 `@repr(C) struct`、`@repr(C) union` 与 `@bits(N)` 位域，并通过 `@extern_c("c_symbol")` 为每个 C 函数赋予形式化 `requires` / `ensures` / `effects` 契约与 1:1 `sizeof` 校验。
 
 | 错误码 ID | 所属阶段 | 触发条件 | `--ai-json` 确定性修复建议 |
 | :--- | :---: | :--- | :--- |
-| **`E0501_WILDCARD_IMPORT_FORBIDDEN`** | Phase 1 | 使用了通配符导入 `import std::collections::*` | 替换为显式符号列表 `import std::collections::{Vec, HashMap}` 或模块别名 |
-| **`E0502_CIRCULAR_MODULE_DEPENDENCY`** | Phase 1 | 模块 `import` 依赖图存在环路（`mod_a -> mod_b -> mod_a`） | 将共享的数据结构或 `trait` 抽离至独立的底层 `.jni` 模块以打破环路 |
-| **`E0503_PACKAGE_EFFECT_ESCALATION`** | Phase 2 | 导入并调用了超出 `Tapestry.toml` 中 `allow_effects` 授权范围的模块/函数（如未授权的 `AllocGC`、`IO` 或 `Unsafe`） | 移除越权调用，或在 `Tapestry.toml` 经人工审计后显式放开对应效应权限 |
-| **`E0504_CONTRACT_SEMVER_BREAK`** | Phase 3 | 在非破坏性升级中修改了公开签名、新增了 `effects`、收紧了 `requires` 或削弱了 `ensures` | 恢复兼容契约，或显式升级主版本号 |
-| **`E0505_VISIBILITY_VIOLATION`** | Phase 1 | 跨模块访问未标记 `pkg`/`pub` 的私有符号，或跨包访问仅标记 `pkg` 的包内符号 | 仅调用目标模块 `.jni` 中公开导出的 `pub` 符号 |
+| **`E0501_UNPAIRED_MODULE`** | Phase 1 | 包内导出的模块缺失配对的 `.jni` 蓝图或 `.jn` 实现文件 | 补齐配对的 `<mod>.jni` 文学化蓝图与 `<mod>.jn` 实现 |
+| **`E0502_CIRCULAR_DEPENDENCY`** | Phase 1 | 模块 `import` 依赖图存在环路（`mod_a -> mod_b -> mod_a`） | 将共享的数据结构或 `trait` 抽离至独立的底层 `.jni` 模块以打破环路 |
+| **`E0503_CAPABILITY_VIOLATION`** | Phase 2 | 模块请求了超出 `Tapestry.toml` 中 `allow_effects` 沙箱授权范围的受限效应（如 `Net`、`IO`、`Unsafe`） | 移除越权调用，或在 `Tapestry.toml` 经人工审计后显式放开对应效应权限 |
+| **`E0504_UNEXPORTED_MODULE`** | Phase 1 | 导入了未在包根门面 `pkg.jni` 中 `pub mod` 公开导出的内部模块 | 仅导入 `pkg.jni` 公开导出的模块，或在 `pkg.jni` 中显式导出 |
+| **`E0505_UNDECLARED_FFI_IMPORT`** | Phase 2 | 在普通模块中使用黑盒 `import c "<header>.h"` 导入外部 C 头文件 | 使用 `spindle bindgen-c` 生成白盒 `.jni` 蓝图（`@repr(C)` `struct`/`union`/`@bits(N)` + `@extern_c`）后导入该白盒模块 |
+| **`E0506_SEMVER_EFFECT_EXPANSION`** | Phase 3 | 候选版本升级对已有公开函数新增了副作用标签（$E_{\text{new}} \not\subseteq E_{\text{old}}$） | 移除新增副作用，或显式作为主版本破坏性变更发布 |
+| **`E0507_SEMVER_STRENGTHENED_REQUIRES`** | Phase 3 | 候选版本升级收紧了已有公开函数的 `requires` 前置条件，破坏既有调用方 | 恢复原前置条件，或新增独立的受限函数 |
+| **`E0508_SEMVER_WEAKENED_ENSURES`** | Phase 3 | 候选版本升级削弱或删除了已有公开函数的 `ensures` 后置条件保证 | 恢复原后置条件契约保证 |
+| **`E0509_SEMVER_BEHAVIORAL_REGRESSION`** | Phase 3 | 候选 `.jn` 补丁在保持 `.jni` 不变的情况下违反了原 `.jni` 契约或 `@example` 差分验证 | 修复 `.jn` 实现回归，确保 100% 通过原 `.jni` 契约与差分测试 |
+| **`E0510_UNDECLARED_RT_INTRINSIC`** | Phase 2 | 模块在 `.jn` 中绕过 `std::rt::intrinsics` 直接调用底层 `jenny_rt.h` 的 `jn_raw_*`/`jn_scratch_*` 函数，或未声明 `import std::rt::intrinsics` 即调用 `rt_*` 原语 | 在 `.jni` 与 `.jn` 中显式声明 `import std::rt::intrinsics` 并调用带契约的 `rt_*` 函数（或使用上层 `RawBuf`/`Arena` 封装） |
+
+

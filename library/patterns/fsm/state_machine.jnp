@@ -1,0 +1,63 @@
+{
+  "pattern_id": "fsm::state_machine",
+  "kind": "spin_dsl",
+  "description": "Declarative finite state machine (@spin fsm::state_machine(<Struct>) { <src> --[<ev>]--> <dst> [guard (<cond>)] })",
+  "target_struct_match": {
+    "module": "spin_fsm_order",
+    "struct": "OrderMachine"
+  },
+  "default_dsl_block": [
+    "@spin fsm::state_machine(OrderMachine) {",
+    "    0 --[0]--> 1 guard (self.amount_cents > 0)",
+    "    1 --[1]--> 2 guard (self.amount_cents > 0)",
+    "    2 --[2]--> 3",
+    "    3 --[3]--> 4",
+    "    0 --[4]--> 5",
+    "    1 --[4]--> 5",
+    "}"
+  ],
+  "methods": [
+    {
+      "name": "new",
+      "params": [
+        { "mode": "borrow", "name": "amount_cents", "ty": "i64" }
+      ],
+      "ret_ty": "{Struct}",
+      "err_ty": null,
+      "ensures": [
+        "result.state == 0 && result.transitions == 0"
+      ]
+    },
+    {
+      "name": "can_fire",
+      "params": [
+        { "mode": "borrow", "name": "self", "ty": "{Struct}" },
+        { "mode": "borrow", "name": "ev", "ty": "i64" }
+      ],
+      "ret_ty": "bool",
+      "err_ty": null,
+      "ensures": []
+    },
+    {
+      "name": "step",
+      "params": [
+        { "mode": "mut", "name": "self", "ty": "{Struct}" },
+        { "mode": "borrow", "name": "ev", "ty": "i64" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": "FsmError",
+      "ensures": [
+        "self.transitions == old(self.transitions) + 1"
+      ]
+    },
+    {
+      "name": "is_terminal",
+      "params": [
+        { "mode": "borrow", "name": "self", "ty": "{Struct}" }
+      ],
+      "ret_ty": "bool",
+      "err_ty": null,
+      "ensures": []
+    }
+  ]
+}

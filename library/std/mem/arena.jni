@@ -1,0 +1,115 @@
+# `std::mem::arena` — Regional Bump Arena & 64KB Immix Mark-Region Pool
+
+## 1. Design Intent & Rust `bumpalo` / GC Comparison
+
+In Rust, regional bump allocation (`bumpalo::Bump`) requires `<'a>` lifetime parameters infecting every AST node or parser token (`Node<'a>`), and cyclic graph reclamation requires either `Rc<RefCell<T>>` (which leaks cycles) or external arena index tables.
+
+In Jenny's `std::mem::arena`:
+1. **`BumpArena`** provides $O(1)$ 8-byte-aligned bump allocation with `checkpoint()` and `rollback(mark)` for nested parser/compiler scopes, plus `reset()` for zero-cost bulk reclamation.
+2. **`ImmixNode` & `ImmixPool`** expose Jenny's **64KB Block (`65,536B`) + 128B Line (`512 lines/block`) Immix Mark-Region Collector** (`^T`):
+   - Objects are bump-allocated into free 128B line holes inside 64KB `JnImmixBlock`s.
+   - `collect_keep_two(r1, r2)` marks live `^ImmixNode` roots (`jn_gc_begin_mark` + `jn_gc_mark_ptr`), sweeps unmarked 128B lines into reusable holes (`jn_gc_sweep_epoch`), and recycles completely empty 64KB blocks.
+
+## 2. Formal Interface & Contracts
+
+```jenny
+module std_mem_arena
+
+import std::rt::intrinsics
+
+pub enum ArenaError {
+    OutOfMemory,
+    InvalidRequest,
+    InvalidWatermark,
+}
+
+pub struct BumpArena {
+    capacity: i64,
+    used: i64 = 0,
+    allocs: i64 = 0,
+    peak_used: i64 = 0,
+
+    invariant self.capacity >= 64 && self.capacity <= 16777216
+    invariant self.used >= 0 && self.used <= self.capacity
+    invariant self.allocs >= 0
+    invariant self.peak_used >= self.used && self.peak_used <= self.capacity
+}
+
+pub struct ImmixNode {
+    id: i64,
+    payload: i64,
+    next: ^ImmixNode?,
+
+    invariant self.id >= 0
+}
+
+impl BumpArena {
+    pub fn new(capacity: i64) -> BumpArena ! ArenaError
+        effects []
+        requires capacity >= 64 && capacity <= 16777216 else ArenaError.InvalidRequest
+        ensures result.capacity == capacity && result.used == 0 && result.allocs == 0
+
+    pub fn alloc_aligned(mut self, size_bytes: i64) -> i64 ! ArenaError
+        effects [Mutate, AllocRegion]
+        requires size_bytes > 0 else ArenaError.InvalidRequest
+        ensures self.used > old(self.used) && self.allocs == old(self.allocs) + 1
+
+    pub fn checkpoint(self) -> i64
+        effects []
+        ensures result == self.used
+
+    pub fn rollback(mut self, watermark: i64) -> i64 ! ArenaError
+        effects [Mutate]
+        requires watermark >= 0 && watermark <= self.used else ArenaError.InvalidWatermark
+        ensures self.used == watermark
+
+    pub fn reset(mut self) -> i64
+        effects [Mutate]
+        ensures self.used == 0 && self.allocs == 0 && self.peak_used >= old(self.peak_used)
+}
+
+pub fn immix_spawn_node(id: i64, payload: i64, next: ^ImmixNode?) -> ^ImmixNode
+    effects [AllocGC]
+    requires id >= 0
+    ensures result.id == id && result.payload == payload
+
+pub fn immix_collect_keep_two(r1: ^ImmixNode, r2: ^ImmixNode) -> i64
+    effects [AllocGC]
+    ensures result >= 0
+
+@example("EX-STD-ARENA-01: BumpArena 8-byte alignment, checkpoint rollback, and bulk reset") {
+    var arena = BumpArena.new(1024)!
+    val off0 = arena.alloc_aligned(13)!
+    assert(off0 == 0)
+    assert(arena.used == 16)
+    val mark = arena.checkpoint()
+    val off1 = arena.alloc_aligned(24)!
+    assert(off1 == 16)
+    assert(arena.used == 40)
+    arena.rollback(mark)!
+    assert(arena.used == 16)
+    assert(arena.peak_used == 40)
+    arena.reset()
+    assert(arena.used == 0)
+    assert(arena.peak_used == 40)
+}
+
+@example("EX-STD-ARENA-02: 64KB Block + 128B Line Immix collector marks live roots and reclaims holes") {
+    gc_collect_all()
+    val n1 = immix_spawn_node(1, 100, null)
+    val n2 = immix_spawn_node(2, 200, n1)
+    val dead1 = immix_spawn_node(3, 300, null)
+    val dead2 = immix_spawn_node(4, 400, dead1)
+    assert(jn_gc_active_blocks() == 1)
+    assert(jn_gc_live_lines() == 4)
+    val reclaimed = immix_collect_keep_two(n1, n2)
+    assert(reclaimed >= 510)
+    assert(jn_gc_live_lines() == 2)
+    val reused = immix_spawn_node(5, 500, n2)
+    assert(reused.payload == 500)
+    assert(jn_gc_active_blocks() == 1)
+    assert(jn_gc_live_lines() == 3)
+    gc_collect_all()
+    assert(jn_gc_active_blocks() == 0)
+}
+```

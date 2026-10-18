@@ -1,0 +1,54 @@
+module std_io_buf_io
+
+import std::mem::raw_buf
+
+impl BufChannel {
+    pub fn with_capacity(cap: i64) -> BufChannel ! BufIoError {
+        val b = RawBuf.new(cap)?
+        return BufChannel { buf: b, read_pos: 0, write_pos: 0, flushed_count: 0 }
+    }
+
+    pub fn unread_len(self) -> i64 {
+        return self.write_pos - self.read_pos
+    }
+
+    pub fn write_frame(mut self, payload: i64) -> i64 ! BufIoError {
+        if self.write_pos == self.buf.cap {
+            self.buf.grow(self.write_pos + 1)?
+        }
+        self.buf.write_at(self.write_pos, payload)?
+        self.write_pos += 1
+        return self.write_pos - self.read_pos
+    }
+
+    pub fn read_frame(mut self) -> i64 ! BufIoError {
+        val v = self.buf.read_at(self.read_pos)?
+        self.read_pos += 1
+        return v
+    }
+
+    pub fn compact(mut self) -> i64 ! BufIoError {
+        val unread = self.write_pos - self.read_pos
+        if self.read_pos > 0 && unread > 0 {
+            self.buf.copy_within(self.read_pos, 0, unread)?
+        }
+        self.read_pos = 0
+        self.write_pos = unread
+        return self.write_pos
+    }
+
+    pub fn flush_all(mut self) -> i64 {
+        val unread = self.write_pos - self.read_pos
+        self.flushed_count += unread
+        self.read_pos = 0
+        self.write_pos = 0
+        return self.flushed_count
+    }
+
+    pub fn drop_channel(mut self) -> i64 {
+        self.buf.release()
+        self.read_pos = 0
+        self.write_pos = 0
+        return 0
+    }
+}

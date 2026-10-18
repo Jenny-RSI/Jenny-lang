@@ -1,0 +1,127 @@
+# `std::collections::vec_deque` — Circular Double-Ended Queue (`VecDeque`)
+
+## 1. Design Intent & Rust `alloc::collections::VecDeque` Comparison
+
+In Rust's `alloc::collections::VecDeque<T>`, wrap-around ring indexing (`head`, `len`, physical index modulo capacity) and split-slice reallocation (`handle_capacity_increase`) require delicate `unsafe` pointer copies across two disjoint ring segments.
+
+In Jenny's `std::collections::vec_deque`, `VecDeque` composes `std::mem::raw_buf::RawBuf` and enforces ring-buffer wrap-around invariants at every entry and exit point:
+- `invariant self.len >= 0 && self.len <= self.buf.cap`
+- `invariant (self.buf.cap == 0 && self.head == 0) || (self.buf.cap > 0 && self.head >= 0 && self.head < self.buf.cap)`
+- $O(1)$ amortized `push_front`, `push_back`, `pop_front`, `pop_back`, and random access `get(logical_idx)`
+- Linearizing $2\times$ geometric growth (`grow_ring`) that unwraps split circular segments into a contiguous `[0 .. len)` layout (`head = 0`) and deterministically frees the old buffer.
+
+## 2. Formal Interface & Contracts
+
+```jenny
+module std_collections_vec_deque
+
+import std::mem::raw_buf
+
+pub enum DequeError {
+    EmptyDeque,
+    IndexOutOfBounds,
+    CapacityOverflow,
+}
+
+pub struct VecDeque {
+    buf: RawBuf,
+    head: i64 = 0,
+    len: i64 = 0,
+
+    invariant self.len >= 0 && self.len <= self.buf.cap
+    invariant (self.buf.cap == 0 && self.head == 0) || (self.buf.cap > 0 && self.head >= 0 && self.head < self.buf.cap)
+}
+
+impl VecDeque {
+    pub fn new() -> VecDeque
+        effects []
+        ensures result.len == 0 && result.buf.cap == 0 && result.head == 0
+
+    pub fn with_capacity(cap: i64) -> VecDeque ! DequeError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else DequeError.CapacityOverflow
+        ensures result.len == 0 && result.buf.cap == cap && result.head == 0
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len
+
+    pub fn capacity(self) -> i64
+        effects []
+        ensures result == self.buf.cap
+
+    pub fn is_empty(self) -> bool
+        effects []
+        ensures result == (self.len == 0)
+
+    pub fn grow_ring(mut self) -> i64 ! DequeError
+        effects [Mutate, AllocNative]
+        requires self.buf.cap < 1048576 else DequeError.CapacityOverflow
+        ensures self.buf.cap > old(self.buf.cap) && self.head == 0 && self.len == old(self.len)
+
+    pub fn push_back(mut self, val: i64) -> i64 ! DequeError
+        effects [Mutate, AllocNative]
+        requires self.len < 1048576 else DequeError.CapacityOverflow
+        ensures self.len == old(self.len) + 1
+
+    pub fn push_front(mut self, val: i64) -> i64 ! DequeError
+        effects [Mutate, AllocNative]
+        requires self.len < 1048576 else DequeError.CapacityOverflow
+        ensures self.len == old(self.len) + 1
+
+    pub fn pop_front(mut self) -> i64 ! DequeError
+        effects [Mutate]
+        requires self.len > 0 else DequeError.EmptyDeque
+        ensures self.len == old(self.len) - 1
+
+    pub fn pop_back(mut self) -> i64 ! DequeError
+        effects [Mutate]
+        requires self.len > 0 else DequeError.EmptyDeque
+        ensures self.len == old(self.len) - 1
+
+    pub fn get(self, logical_idx: i64) -> i64 ! DequeError
+        effects []
+        requires logical_idx >= 0 && logical_idx < self.len else DequeError.IndexOutOfBounds
+
+    pub fn clear(mut self) -> i64
+        effects [Mutate]
+        ensures self.len == 0 && self.head == 0
+
+    pub fn drop_deque(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.len == 0 && self.buf.cap == 0 && self.head == 0
+}
+
+@example("EX-STD-DEQUE-01: VecDeque circular push_front, push_back, wrap-around 2x resize, and FIFO/LIFO pops") {
+    var dq = VecDeque.with_capacity(4)!
+    dq.push_back(10)!
+    dq.push_back(20)!
+    dq.push_front(5)!
+    dq.push_front(1)!
+    assert(dq.len() == 4)
+    assert(dq.get(0)! == 1)
+    assert(dq.get(1)! == 5)
+    assert(dq.get(2)! == 10)
+    assert(dq.get(3)! == 20)
+    dq.push_back(30)!
+    assert(dq.capacity() == 8)
+    assert(dq.len() == 5)
+    assert(dq.pop_front()! == 1)
+    assert(dq.pop_back()! == 30)
+    assert(dq.pop_front()! == 5)
+    assert(dq.len() == 2)
+    dq.drop_deque()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-DEQUE-02: VecDeque rejects pop on empty and out-of-bounds logical index") {
+    var dq = VecDeque.new()
+    val e1 = dq.pop_front()
+    assert(e1 is Err(DequeError.EmptyDeque))
+    dq.push_back(42)!
+    val e2 = dq.get(1)
+    assert(e2 is Err(DequeError.IndexOutOfBounds))
+    dq.drop_deque()
+    assert(active_native_boxes() == 0)
+}
+```

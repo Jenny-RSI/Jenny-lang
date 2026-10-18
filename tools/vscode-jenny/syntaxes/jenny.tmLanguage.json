@@ -46,7 +46,7 @@
       "patterns": [
         {
           "name": "storage.type.annotation.jenny",
-          "match": "@(spin|example|apply|repr|export|operator|scoped)\\b"
+          "match": "@(spin|example|apply|repr|export|operator|scoped|non_suspendable)\\b"
         }
       ]
     },
@@ -54,7 +54,7 @@
       "patterns": [
         {
           "name": "keyword.control.contract.jenny",
-          "match": "\\b(requires|ensures|invariant|effects)\\b"
+          "match": "\\b(requires|ensures|invariant|effects|mask)\\b"
         },
         {
           "name": "variable.language.contract.jenny",
@@ -82,7 +82,7 @@
         },
         {
           "name": "keyword.other.declaration.jenny",
-          "match": "\\b(module|pub|pkg|import|fn|iter|val|var|struct|enum|trait|impl|delegate|dsl|quote|as)\\b"
+          "match": "\\b(module|pub|pkg|import|fn|iter|val|var|struct|enum|error|trait|impl|delegate|dsl|quote|as|test)\\b"
         },
         {
           "name": "constant.language.jenny",

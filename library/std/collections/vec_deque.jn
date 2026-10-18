@@ -1,0 +1,103 @@
+module std_collections_vec_deque
+
+import std::mem::raw_buf
+
+impl VecDeque {
+    pub fn new() -> VecDeque {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return VecDeque { buf: b, head: 0, len: 0 }
+    }
+
+    pub fn with_capacity(cap: i64) -> VecDeque ! DequeError {
+        val b = RawBuf.new(cap)?
+        return VecDeque { buf: b, head: 0, len: 0 }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.buf.cap
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.len == 0
+    }
+
+    pub fn grow_ring(mut self) -> i64 ! DequeError {
+        val old_cap = self.buf.cap
+        val new_cap = if old_cap == 0 { 4 } else { old_cap * 2 }
+        var new_buf = RawBuf.new(new_cap)?
+        var i = 0
+        while i < self.len {
+            val phys = (self.head + i) % old_cap
+            val item = self.buf.read_at(phys)?
+            new_buf.write_at(i, item)?
+            i += 1
+        }
+        self.buf.release()
+        self.buf = new_buf
+        self.head = 0
+        return self.buf.cap
+    }
+
+    pub fn push_back(mut self, val: i64) -> i64 ! DequeError {
+        if self.len == self.buf.cap {
+            self.grow_ring()?
+        }
+        val phys = (self.head + self.len) % self.buf.cap
+        self.buf.write_at(phys, val)?
+        self.len += 1
+        return self.len
+    }
+
+    pub fn push_front(mut self, val: i64) -> i64 ! DequeError {
+        if self.len == self.buf.cap {
+            self.grow_ring()?
+        }
+        self.head = (self.head + self.buf.cap - 1) % self.buf.cap
+        self.buf.write_at(self.head, val)?
+        self.len += 1
+        return self.len
+    }
+
+    pub fn pop_front(mut self) -> i64 ! DequeError {
+        val item = self.buf.read_at(self.head)?
+        self.head = (self.head + 1) % self.buf.cap
+        self.len -= 1
+        if self.len == 0 {
+            self.head = 0
+        }
+        return item
+    }
+
+    pub fn pop_back(mut self) -> i64 ! DequeError {
+        val phys = (self.head + self.len - 1) % self.buf.cap
+        val item = self.buf.read_at(phys)?
+        self.len -= 1
+        if self.len == 0 {
+            self.head = 0
+        }
+        return item
+    }
+
+    pub fn get(self, logical_idx: i64) -> i64 ! DequeError {
+        val phys = (self.head + logical_idx) % self.buf.cap
+        val item = self.buf.read_at(phys)?
+        return item
+    }
+
+    pub fn clear(mut self) -> i64 {
+        self.head = 0
+        self.len = 0
+        return 0
+    }
+
+    pub fn drop_deque(mut self) -> i64 {
+        self.buf.release()
+        self.head = 0
+        self.len = 0
+        return 0
+    }
+}

@@ -1,0 +1,282 @@
+# `std::str::fmt` — AI-Native Constrained Variadic `@spin` Procedural Formatting (`...args: Formattable`), Tuple Format Specifiers & `Arena` Zero-Heap Buffers
+
+Traditional programming languages have long struggled with a tension between "human-readable interpolation templates" and "static type safety / hardware performance" in string formatting:
+1. **C `printf("%d: %s", id, name)`**: Parses format strings byte-by-byte at runtime; any mismatch between placeholders and argument types triggers immediate Undefined Behavior (UB);
+2. **Rust `format!("{id}: {name:#06x}")` / C++20 `std::format`**: To provide human-oriented interpolation sugar, they introduce heavy procedural macros, Trait vtable dispatch (`&dyn Display`), and brace-escaping mini-languages (`{{` vs. `{`), which slow down compilation, bloat binary size, and frequently induce LLM hallucinations around brace escaping or missing Trait implementations;
+3. **C++ / Rust Declarative Type-Deduction Unrolling (SFINAE / recursive variadic templates / fragmented tuple Trait gymnastics)**: Shatters a formatting pipeline that could be expressed in 10 lines of sequential logic into dozens of helper Traits and recursive specialization branches, making control flow difficult for both humans and AI to trace.
+
+**Jenny's AI-Native String Formatting Architecture (Three-Tier Orthogonal Trait Union Bound `...args: Formattable` + Tuple-Preserving Procedural `@spin` Template Expansion)**:
+1. **Three-Tier Orthogonal Traits (`ToStr` / `FmtInto` / `FmtSpecInto`) & Constrained Variadic Pack `...args: Formattable`**:
+   * Strictly forbids C++-style duck-typed unconstrained variadic templates; decouples formatting capabilities into lightweight view conversion `ToStr` (`str`, `String`, `bool`, enums, simple structs like `RoleBadge`), streaming buffer direct-write `FmtInto` (`i64`, complex domain structs like `KvTag`), and parameterized format control `FmtSpecInto` (used for `(val_item, spec, ...params)` format tuples);
+   * `format(...args: Formattable)` and `format_with(culture: Culture, ...args: Formattable)` statically verify at the call site whether every argument satisfies `Formattable = FmtInto | ToStr | (FmtSpecInto, FmtSpec, ...i64)`. Any violating argument immediately triggers the compile-time static error `E0309_VARIADIC_TRAIT_BOUND_UNSATISFIED`.
+2. **Zero-Primitive-Branching Procedural `@spin` Template Expansion & Global Type-Signature Hash Deduplication**:
+   * The body of `format_with` enumerates no concrete primitive types at all, containing only three orthogonal branches: `(val_item, spec, ...params)`, `FmtInto`, and `ToStr`;
+   * Monomorphized expansion preserves first-class tuple types intact (e.g., `_arg3: (i64, FmtSpec, i64)`, destructured inside the function body via `_arg3.0 / _arg3.1 / _arg3.2`) and computes a deterministic hash `format_with__spin_<type_hash>` over the normalized parameter type tuple, achieving 100% reuse across modules and packages in the global monomorphization pool `.jenny-cache/spin/`.
+
+```jenny
+module std_str_fmt
+
+import std::rt::intrinsics
+import std::mem::raw_buf
+
+pub enum FmtError {
+    InvalidCapacity,
+    BufferOverflow,
+    InvalidHexSpec,
+    InvalidPadWidth,
+    InvalidBinBits,
+    SliceOutOfBounds,
+}
+
+pub enum Culture {
+    Invariant,
+    EnUS,
+    DeDE,
+    ZhCN,
+}
+
+pub enum FmtSpec {
+    Dec,
+    HexLower,
+    HexUpper,
+    PadZero,
+    Bin,
+    GroupedInt,
+    Fixed,
+    Scientific,
+    Currency,
+}
+
+pub struct FmtBuffer {
+    buf: RawBuf,
+    len: i64 = 0,
+    cap: i64 = 0,
+    arena_mark: i64 = -1,
+
+    invariant self.len >= 0 && self.cap >= 0
+    invariant self.len <= self.cap
+    invariant self.cap == self.buf.cap
+    invariant self.cap <= 1048576
+    invariant self.arena_mark >= -1
+}
+
+pub trait ToStr {
+    pub fn to_str(self) -> str
+}
+
+pub trait FmtInto {
+    pub fn fmt_into(self, mut fb: FmtBuffer, culture: Culture) -> i64 ! FmtError
+}
+
+pub trait FmtSpecInto {
+    pub fn fmt_spec_into(self, mut fb: FmtBuffer, culture: Culture, spec: FmtSpec, ...params: i64) -> i64 ! FmtError
+}
+
+pub type Formattable = FmtInto | ToStr | (FmtSpecInto, FmtSpec, ...i64)
+
+pub struct RoleBadge {
+    name: str,
+}
+
+pub struct KvTag {
+    label: str,
+    code: i64 = 0,
+    invariant self.code >= 0
+}
+
+@spin pub fn format(...args: Formattable) -> String
+    effects []
+    ensures result.len() >= 0
+
+@spin pub fn format_with(culture: Culture, ...args: Formattable) -> String
+    effects []
+    ensures result.len() >= 0
+
+impl RoleBadge {
+    pub fn new(name: str) -> RoleBadge
+        effects []
+        ensures result.name.len() == name.len()
+
+    pub fn to_str(self) -> str
+        effects []
+        ensures result.len() == self.name.len()
+}
+
+impl KvTag {
+    pub fn new(label: str, code: i64) -> KvTag
+        effects []
+        requires code >= 0
+        ensures result.code == code
+
+    pub fn fmt_into(self, mut fb: FmtBuffer, culture: Culture) -> i64 ! FmtError
+        effects [Mutate]
+        ensures fb.len > old(fb.len) && result == fb.len
+}
+
+impl FmtBuffer {
+    pub fn in_arena(cap: i64) -> FmtBuffer ! FmtError
+        effects []
+        requires cap >= 0 && cap <= 16384 else FmtError.InvalidCapacity
+        ensures result.len == 0 && result.cap == cap && result.arena_mark >= 0
+
+    pub fn with_capacity(cap: i64) -> FmtBuffer ! FmtError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else FmtError.InvalidCapacity
+        ensures result.len == 0 && result.cap == cap && result.arena_mark == -1
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len
+
+    pub fn capacity(self) -> i64
+        effects []
+        ensures result == self.cap
+
+    pub fn clear(mut self) -> i64
+        effects [Mutate]
+        ensures self.len == 0 && self.cap == old(self.cap)
+        ensures result == 0
+
+    pub fn put_str(mut self, s: str) -> i64 ! FmtError
+        effects [Mutate]
+        requires self.len + s.len() <= self.cap else FmtError.BufferOverflow
+        ensures self.len == old(self.len) + s.len()
+        ensures result == self.len
+
+    pub fn put_string(mut self, s: String) -> i64 ! FmtError
+        effects [Mutate]
+        requires self.len + s.len() <= self.cap else FmtError.BufferOverflow
+        ensures self.len == old(self.len) + s.len()
+        ensures result == self.len
+
+    pub fn put_i64(mut self, val: i64) -> i64 ! FmtError
+        effects [Mutate]
+        requires self.len + 21 <= self.cap else FmtError.BufferOverflow
+        ensures self.len > old(self.len) && self.len <= old(self.len) + 21
+        ensures result == self.len
+
+    pub fn put_hex_u32(mut self, val: i64, digits: i64) -> i64 ! FmtError
+        effects [Mutate]
+        requires val >= 0 && val <= 4294967295 else FmtError.InvalidHexSpec
+        requires digits >= 1 && digits <= 8 else FmtError.InvalidHexSpec
+        requires self.len + digits <= self.cap else FmtError.BufferOverflow
+        ensures self.len == old(self.len) + digits
+        ensures result == self.len
+
+    pub fn put_hex_upper_u32(mut self, val: i64, digits: i64) -> i64 ! FmtError
+        effects [Mutate]
+        requires val >= 0 && val <= 4294967295 else FmtError.InvalidHexSpec
+        requires digits >= 1 && digits <= 8 else FmtError.InvalidHexSpec
+        requires self.len + digits <= self.cap else FmtError.BufferOverflow
+        ensures self.len == old(self.len) + digits
+        ensures result == self.len
+
+    pub fn put_pad_zero(mut self, val: i64, width: i64) -> i64 ! FmtError
+        effects [Mutate]
+        requires width >= 1 && width <= 20 else FmtError.InvalidPadWidth
+        requires self.len + 21 <= self.cap else FmtError.BufferOverflow
+        ensures self.len >= old(self.len) + width && result == self.len
+
+    pub fn put_bin_u32(mut self, val: i64, bits: i64) -> i64 ! FmtError
+        effects [Mutate]
+        requires val >= 0 && val <= 4294967295 else FmtError.InvalidBinBits
+        requires bits >= 1 && bits <= 32 else FmtError.InvalidBinBits
+        requires self.len + bits <= self.cap else FmtError.BufferOverflow
+        ensures self.len == old(self.len) + bits
+        ensures result == self.len
+
+    pub fn put_grouped_i64(mut self, val: i64, culture: Culture) -> i64 ! FmtError
+        effects [Mutate]
+        requires self.len + 27 <= self.cap else FmtError.BufferOverflow
+        ensures self.len > old(self.len) && self.len <= old(self.len) + 27
+        ensures result == self.len
+
+    pub fn put_spec(mut self, culture: Culture, val: i64, spec: FmtSpec, param: i64) -> i64 ! FmtError
+        effects [Mutate]
+        ensures self.len > old(self.len) && result == self.len
+
+    pub fn put_bool(mut self, flag: bool) -> i64 ! FmtError
+        effects [Mutate]
+        requires self.len + 5 <= self.cap else FmtError.BufferOverflow
+        ensures (flag && self.len == old(self.len) + 4) || (!flag && self.len == old(self.len) + 5)
+        ensures result == self.len
+
+    pub fn equals_str(self, target: str) -> bool
+        effects []
+        ensures !result || self.len == target.len()
+
+    pub fn to_sso_string(self) -> String
+        effects []
+        ensures result.len() == self.len
+        ensures (self.len <= 22 && result.is_sso()) || (self.len > 22 && !result.is_sso())
+
+    pub fn slice_to_sso(self, start: i64, sub_len: i64) -> String ! FmtError
+        effects []
+        requires start >= 0 && sub_len >= 0 else FmtError.SliceOutOfBounds
+        requires start + sub_len <= self.len else FmtError.SliceOutOfBounds
+        ensures result.len() == sub_len
+        ensures (sub_len <= 22 && result.is_sso()) || (sub_len > 22 && !result.is_sso())
+
+    pub fn drop_fmt(mut self) -> i64
+        effects [Mutate]
+        ensures self.len == 0 && self.cap == 0 && self.arena_mark == -1 && result == 0
+}
+
+@example("EX-STD-FMT-01: bounded @spin variadic str::format with ToStr, FmtInto, and first-class format tuples") {
+    val hex_item = (48879, FmtSpec.HexLower, 4)
+    val s1 = str::format("id=", -42, ",hex=0x", hex_item)
+    assert(s1.len() == 17)
+    assert(s1.is_sso())
+    assert(s1.eq_str("id=-42,hex=0xbeef"))
+    assert(active_native_boxes() == 0)
+
+    val s2 = str::format("seq=", (7, FmtSpec.PadZero, 4), ",bin=", (10, FmtSpec.Bin, 4), ",HEX=", (48879, FmtSpec.HexUpper, 4), ",ok=", true)
+    assert(s2.len() == 34)
+    assert(!s2.is_sso())
+    assert(s2.eq_str("seq=0007,bin=1010,HEX=BEEF,ok=true"))
+
+    val us_amt = str::format_with(Culture.EnUS, "USD ", (1234567, FmtSpec.GroupedInt))
+    assert(us_amt.is_sso())
+    assert(us_amt.eq_str("USD 1,234,567"))
+
+    val de_amt = str::format_with(Culture.DeDE, "EUR ", (1234567, FmtSpec.GroupedInt), " net")
+    assert(de_amt.is_sso())
+    assert(de_amt.eq_str("EUR 1.234.567 net"))
+
+    val nested = str::format("[", s1, "]")
+    assert(nested.len() == 19)
+    assert(nested.is_sso())
+    assert(nested.eq_str("[id=-42,hex=0xbeef]"))
+
+    val badge = RoleBadge.new("ADMIN")
+    val tag = KvTag.new("quota", 12500)
+    val s_tag = str::format_with(Culture.EnUS, "[", badge, "] <", tag, ">")
+    assert(s_tag.is_sso())
+    assert(s_tag.eq_str("[ADMIN] <quota=12,500>"))
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-FMT-02: Arena-backed FmtBuffer streaming and contract error rejection") {
+    var fb = FmtBuffer.in_arena(16)!
+    assert(active_native_boxes() == 0)
+    val e1 = fb.put_i64(100)
+    assert(e1 is Err(FmtError.BufferOverflow))
+
+    assert(fb.put_str("0x")! == 2)
+    val e2 = fb.put_hex_u32(255, 9)
+    assert(e2 is Err(FmtError.InvalidHexSpec))
+    val e3 = fb.put_hex_u32(-1, 4)
+    assert(e3 is Err(FmtError.InvalidHexSpec))
+
+    assert(fb.put_hex_u32(255, 2)! == 4)
+    assert(fb.equals_str("0xff"))
+    val sso = fb.to_sso_string()
+    assert(sso.is_sso())
+    assert(sso.eq_str("0xff"))
+
+    val e4 = fb.slice_to_sso(2, 5)
+    assert(e4 is Err(FmtError.SliceOutOfBounds))
+    assert(fb.drop_fmt() == 0)
+    assert(active_native_boxes() == 0)
+}
+```

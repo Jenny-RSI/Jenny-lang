@@ -1,0 +1,122 @@
+# `std::collections::hash_map` — Open-Addressing Hash Table (`HashMap`)
+
+## 1. Design Intent & Rust `hashbrown` / `std::collections::HashMap` Comparison
+
+In Rust's `hashbrown::RawTable`, open-addressing bucket probing, tombstone management, and 75%/87.5% load-factor resizing rely on raw control bytes (`Bucket<T>`, `NonNull<u8>`) and `unsafe` pointer arithmetic.
+
+In Jenny's `std::collections::hash_map`, `HashMap` stores flat `(state, key, val)` triples inside a single contiguous `std::mem::raw_buf::RawBuf` (`self.buf.cap == self.cap * 3`, requiring only 1 heap allocation per map) and enforces its load-factor and occupancy invariants at every method boundary:
+- `invariant self.len * 4 <= self.cap * 3` (strict $\le 75\%$ load factor)
+- `invariant self.len + self.tombstones <= self.cap`
+- Automatic $2\times$ table growth and tombstone purging (`rehash_to`) when `(len + tombstones + 1) * 4 > cap * 3`
+- Tombstone-reuse on `insert` and deterministic memory reclamation via `drop_map(mut self)`.
+
+## 2. Formal Interface & Contracts
+
+```jenny
+module std_collections_hash_map
+
+import std::mem::raw_buf
+
+pub enum MapError {
+    KeyNotFound,
+    CapacityOverflow,
+}
+
+pub struct HashMap {
+    buf: RawBuf,
+    cap: i64 = 0,
+    len: i64 = 0,
+    tombstones: i64 = 0,
+
+    invariant self.cap >= 0 && self.len >= 0 && self.tombstones >= 0
+    invariant self.buf.cap == self.cap * 3
+    invariant self.len + self.tombstones <= self.cap
+    invariant self.len * 4 <= self.cap * 3
+}
+
+impl HashMap {
+    pub fn new() -> HashMap
+        effects []
+        ensures result.len == 0 && result.cap == 0
+
+    pub fn with_capacity(initial_cap: i64) -> HashMap ! MapError
+        effects [AllocNative]
+        requires initial_cap >= 0 && initial_cap <= 262144 else MapError.CapacityOverflow
+        ensures result.len == 0 && result.cap == initial_cap
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len
+
+    pub fn capacity(self) -> i64
+        effects []
+        ensures result == self.cap
+
+    pub fn is_empty(self) -> bool
+        effects []
+        ensures result == (self.len == 0)
+
+    pub fn rehash_to(mut self, new_cap: i64) -> i64 ! MapError
+        effects [Mutate, AllocNative]
+        requires new_cap >= 8 && new_cap <= 262144 else MapError.CapacityOverflow
+        requires self.len * 4 <= new_cap * 3 else MapError.CapacityOverflow
+        ensures self.cap == new_cap && self.len == old(self.len) && self.tombstones == 0
+
+    pub fn insert(mut self, key: i64, val: i64) -> i64 ! MapError
+        effects [Mutate, AllocNative]
+        requires self.len < 196608 else MapError.CapacityOverflow
+        ensures self.len >= old(self.len) && self.len <= old(self.len) + 1
+
+    pub fn get(self, key: i64) -> i64 ! MapError
+        effects []
+
+    pub fn contains_key(self, key: i64) -> bool
+        effects []
+
+    pub fn remove(mut self, key: i64) -> i64 ! MapError
+        effects [Mutate]
+        requires self.len > 0 else MapError.KeyNotFound
+        ensures self.len == old(self.len) - 1
+
+    pub fn drop_map(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.len == 0 && self.cap == 0 && self.buf.cap == 0
+}
+
+@example("EX-STD-MAP-01: HashMap open-addressing insert, 75% load-factor rehash, update, and tombstone remove") {
+    var m = HashMap.new()
+    assert(m.is_empty())
+    var i = 1
+    while i <= 10 {
+        m.insert(i * 17, i * 100)!
+        i += 1
+    }
+    assert(m.len() == 10)
+    assert(m.capacity() == 16)
+    assert(m.get(17)! == 100)
+    assert(m.get(170)! == 1000)
+    m.insert(51, 9999)!
+    assert(m.len() == 10)
+    assert(m.get(51)! == 9999)
+    val removed = m.remove(51)!
+    assert(removed == 9999)
+    assert(m.len() == 9)
+    assert(!m.contains_key(51))
+    m.insert(51, 777)!
+    assert(m.len() == 10)
+    assert(m.get(51)! == 777)
+    m.drop_map()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-MAP-02: HashMap rejects missing key lookup and missing key removal") {
+    var m = HashMap.with_capacity(8)!
+    m.insert(42, 840)!
+    val e1 = m.get(99)
+    assert(e1 is Err(MapError.KeyNotFound))
+    val e2 = m.remove(99)
+    assert(e2 is Err(MapError.KeyNotFound))
+    m.drop_map()
+    assert(active_native_boxes() == 0)
+}
+```

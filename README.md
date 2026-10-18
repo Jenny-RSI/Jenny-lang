@@ -78,22 +78,25 @@ Unstructured LLM-assisted software development ("Vibe Coding") faces a severe **
 ## 🚀 Quick Start
 
 ### Prerequisites
-* **Python 3.10+**
+* **Node.js v24+** (native TypeScript execution with zero `node_modules` dependencies)
+* **Python 3.10+** (for evaluation scripts & historical baseline runners)
 * **LLVM `clang`** (`clang -std=c11 -O3` on `PATH` or `C:\Tools\LLVM\bin\clang.exe`)
 
 ### Run Verification & Benchmarks
 ```powershell
-# 1. Measure exact token economy metrics (TCR / TCR_impl / ECC) across B01-B25
+# 1. Compile all 40 modules (B01-B25 + 15 library/std modules), run 79 @example sandboxes, and verify 18 Stage 1-4 mutants
+node compiler/src/jenny.ts --mutate
+
+# 2. Run automated contract fuzzing & stateful container fuzzing across all 40 modules (33,380 invocations, 0 leaks)
+node compiler/src/jenny.ts --fuzz
+
+# 3. Run Spindle white-box package audit, supply-chain fault injection (6/6), and contract SemVer verification (4/4)
+node compiler/src/jenny.ts audit
+node compiler/src/jenny.ts mutate
+node compiler/src/jenny.ts semver-check
+
+# 4. Measure token economy metrics (TCR / TCR_impl / ECC) across B01-B25
 python benchmarks/eval/measure_tokens.py
-
-# 2. Run Stage 0 runtime contract mutation suite (11/11 mutants caught with exit code 42)
-python compiler/jenny-nano/jenny_nano.py --mutate
-
-# 3. Compile all 25 modules to native binaries, run 49 @example sandboxes, and verify 15 Stage 1-4 mutants
-python compiler/jenny-flow/jenny_flow.py --mutate --build-native
-
-# 4. Run automated contract fuzzing & 20-round leak-checked @example stress replay (2,480 invocations)
-python compiler/jenny-flow/jenny_flow.py --fuzz
 ```
 
 ---
@@ -106,20 +109,26 @@ jenny/
 ├── README_zh.md               # Chinese project overview (中文总览)
 ├── ROADMAP.md                 # Master Version Roadmap (v0.1 -> v1.0, English)
 ├── ROADMAP_zh.md              # Master Version Roadmap (中文路线图)
-├── CONTRIBUTING.md            # Developer & AI Agent Contribution Guidelines
-├── compiler/                  # Jenny v0.1 prototype compiler & C99 runtime
-│   ├── jenny-nano/            # Stage 0 contract weaver & C99 sandbox verifier
-│   └── jenny-flow/            # Full v0.1 AST -> C99 compiler, borrow/effect checker & fuzzer
+├── AGENTS.md                  # AI Agent Collaborative Engineering Charter
+├── MEMORY.md                  # Persistent Architectural Decisions & Empirical Memory
+├── compiler/                  # Modular TypeScript compiler & Spindle toolchain
+│   ├── src/
+│   │   ├── jenny.ts           # Unified CLI entry point (`node compiler/src/jenny.ts`)
+│   │   ├── flow/              # 13 modular TypeScript compiler stages (AST, blueprint, spin, QF_LIA prover, C99 codegen)
+│   │   └── spindle/           # 5 modular TypeScript package manager stages (audit, semver-check, bindgen-c, pack/decompile)
+│   ├── jenny-flow/            # C99 runtime header (`jenny_rt.h`) & historical Python compiler reference
+│   └── jenny-nano/            # Stage 0 contract weaver prototype
+├── library/                   # Official Jenny Standard Library & Declarative Patterns
+│   ├── std/                   # 15 implemented `std` modules (`rt`, `ffi`, `mem`, `collections`, `str`, `io`, `codec`) + `CHECKLIST.md`
+│   └── patterns/              # White-box `@spin` / `@apply` pattern packages (`fsm`, `codec`, `crud`)
 ├── benchmarks/                # Jenny-Bench-25 suite (B01-B25: .jni + .jn + .rs) & evaluation tools
 ├── tools/vscode-jenny/        # VS Code / Antigravity extension & LSP server (jenny-lsp)
-├── patterns/                  # Official @spin declarative templates (fsm, codec, crud)
-├── stdlib/                    # Jenny standard library blueprints (target of v0.2 Jenny-Std)
 └── docs/
-    ├── paper/                 # Academic technical papers (English & Chinese)
+    ├── paper/                 # Academic technical papers & peer reviews (English & Chinese)
     ├── roadmap/               # Versioned roadmaps (roadmap_v0.1.md, roadmap_v0.2.md)
-    ├── design/                # English language design philosophy & v2.0 specifications (00-11)
+    ├── design/                # English language design philosophy & v2.0 specifications (00-12)
     ├── reports/               # Empirical retrospective & cross-language comparison reports
-    └── zh/                    # Complete preserved Chinese documentation & specifications
+    └── zh/                    # Complete preserved Chinese documentation, specs (00-13), plans, logs & reports
 ```
 
 ---

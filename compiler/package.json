@@ -1,0 +1,16 @@
+{
+  "name": "@jenny-lang/compiler",
+  "version": "0.2.0-alpha2",
+  "description": "Spinning Jenny (v2.0) Modular TypeScript Compiler (jenny-flow) & White-Box Package Manager (spindle)",
+  "type": "module",
+  "scripts": {
+    "jenny": "node src/jenny.ts",
+    "flow": "node src/flow/cli.ts",
+    "flow:mutate": "node src/flow/cli.ts --mutate",
+    "flow:fuzz": "node src/flow/cli.ts --fuzz",
+    "spindle": "node src/spindle/cli.ts",
+    "spindle:audit": "node src/spindle/cli.ts audit",
+    "spindle:mutate": "node src/spindle/cli.ts mutate",
+    "spindle:std-check": "node src/spindle/cli.ts std-check"
+  }
+}

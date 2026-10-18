@@ -11,9 +11,9 @@
 ```mermaid
 flowchart LR
     V01["🟢 v0.1 (Jenny-Proto)\n【单文件核心原型 + C99 后端】\n✅ 已完成 (25 微基准 / 3B 自愈原型)"]
-    V02["🟡 v0.2 (Jenny-Std)\n【以构建 std 标准库为真实战场\n对标 Rust std + 64KB Immix GC\n+ 容器状态机 Fuzz + 同模型跨语言对照】\n🎯 下一目标版本"]
+    V02["🟢 v0.2 (Jenny-Std)\n【以构建 std 标准库为真实战场\n对标 Rust std + Spindle 白盒包管理\n+ 64KB Immix GC + 容器状态机 Fuzz】\n🚧 进行中 (v0.2-alpha1 & alpha2 已完成 ✅)"]
     V03["⚪ v0.3 (Jenny-Fiber & Wasm)\n【结构化并发 std::fiber + WasmGC 后端\n+ DPO/RLVR 强化学习训练飞轮】\n⏳ 远期规划"]
-    V04["⚪ v0.4 (Jenny-Ecosystem)\n【网络/文件系统 std::{net,fs} + Spindle 包管理\n+ 工业级 LSP/IDE 契约审计工作台】\n⏳ 远期规划"]
+    V04["⚪ v0.4 (Jenny-Ecosystem)\n【网络/文件系统 std::{net,fs} + Spindle 生态注册表\n+ 工业级 LSP/IDE 契约审计工作台】\n⏳ 远期规划"]
     V10["⚪ v1.0 (Jenny-SelfHost)\n【jennyc 自举编译器 + 形式化 SMT 插件\n+ 生产级多 Agent 软件工厂】\n🏁 工业级正式版"]
 
     V01 ==> V02 ==> V03 ==> V04 ==> V10
@@ -26,7 +26,7 @@ flowchart LR
 | 版本号 | 版本代号与核心定位 | 编译器与运行时轨核心目标 (`Compiler Track`) | 标准库实战与大模型实证轨核心目标 (`Std & PL-LLM Track`) | 当前状态 | 详细路线图文档 (`docs/roadmap/`) |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | **`v0.1`** | **`Jenny-Proto`**<br>AI 原生语言核心与 C99 转译器原型 | • 完成 `Stage 0 (alpha1)` ~ `Stage 4 (v0.1.0)` 五步原型闭环<br>• `.jni`/`.jn` 分离、三态参数、双轨内存 (`*T`/`*in(arena)`/`^T` 池化原型)、三轨闭包、16B `AnyError`、`@spin` 白盒展开、C99 后端与 `--fuzz`/`--mutate` 原型 | • 构建 25 个单文件微基准（`B01`~`B25`）<br>• 实测总体 `TCR = 0.6833`、`TCR_impl = 0.2197`、`ECC_self = 65.31%`<br>• 本地 `qwen2.5-coder:3b` 18 题骨架补全 `Pass@1 = 50%` $\rightarrow$ `Heal@2 = 100%` | 🟢 **已完成**<br>*(2026-10-17)* | 📄 **[`docs/roadmap/roadmap_v0.1.md`](./docs/roadmap/roadmap_v0.1.md)** |
-| **`v0.2`** | **`Jenny-Std`**<br>以建设 `std` 标准库为真实战场，全面对标 Rust `std` | • **M0.2.1**：多模块包系统（`import std::*`）、跨文件 `.jni` 防火墙与容器泛型支持<br>• **M0.2.2**：真正的 64KB 块/行结构 Immix GC + ASan/UBSan 门禁<br>• **M0.2.3**：面向 `std` 容器的有状态方法序列 Fuzzing（10,000 步随机操作）+ `--diff`<br>• **M0.2.4**：统一 `jenny` CLI 与全路径 `E0108` 检查 | • **P0.2.1**：告别生造测试题，实战构建 `std::{mem, collections, str, io, codec}` 五大标准库集群（`Vec`, `VecDeque`, `HashMap`, `LruCache`, `BufReader`, `PathBuf` 等）<br>• **P0.2.2**：同模型（`3b`/`7b`）写 Jenny `std` vs Rust `std` (`rustc`) vs Go 对照与快修消融实验<br>• **P0.2.3**：双 Agent（Architect `.jni` + Coder `.jn`）协同构建 `std` 实测<br>• **P0.2.4**：Jenny `std` (`clang -O3`) vs Rust `std` (`rustc -O3`) 原生性能基准 | 🟡 **下一目标**<br>*(Next Up)* | 📄 **[`docs/roadmap/roadmap_v0.2.md`](./docs/roadmap/roadmap_v0.2.md)** |
+| **`v0.2`** | **`Jenny-Std`**<br>以建设 `std` 标准库为真实战场，全面对标 Rust `std` | • **M0.2.1 ✅**：白盒包管理 `Spindle` Phase 1–4（`Tapestry.toml`、`Tapestry.lock` 双哈希锁定、按需子图裁剪 83.33%、包级 `allow_effects` 沙箱 `E0501`–`E0505`、`spindle semver-check` 契约语义版本验证 `E0506`–`E0509`、`spindle synthesize` 接口即包按需合成）<br>• **M0.2.2 ✅**：真正的 64KB 块/128B 行结构 Immix GC + `JnRawBuf` 原生连续堆缓冲区<br>• **M0.2.3 ✅**：面向 `std` 12 模块的有状态方法序列 Fuzzing（24,000 步随机容器/流操作零泄漏）<br>• **M0.2.4**：统一 `jenny` CLI 与全路径 `E0108` 检查 | • **P0.2.1 (Phase 1 & 2 ✅)**：已完成 `std::{mem, collections, str, io, codec}` 全量 **12 个标准库模块**及 Rust 对标（整体 `TCR_impl = 0.4388`、Phase 2 `TCR_impl = 0.3587`、`ECC_saving = 60.96%`、187 条形式化契约）<br>• **P0.2.2**：同模型（`3b`/`7b`）写 Jenny `std` vs Rust `std` (`rustc`) 对照实验<br>• **P0.2.3**：双 Agent 协同构建 `std` 实测<br>• **P0.2.4**：Jenny `std` (`clang -O3`) vs Rust `std` (`rustc -O3`) 原生性能基准 | 🟢 **进行中**<br>*(`v0.2-alpha1` & `alpha2` 已完成 ✅)* | 📄 **[`docs/roadmap/roadmap_v0.2.md`](./docs/roadmap/roadmap_v0.2.md)** |
 | **`v0.3`** | **`Jenny-Fiber & Wasm`**<br>结构化并发、WasmGC 后端与 RLVR 飞轮 | • 落地 `std::fiber`（`fiber::all` / `fiber::race`）协作式协程调度器与 `Send`/`Share` 并发安全检查<br>• 新增 WasmGC 原生后端（将 `^T` 直接映射为 WasmGC `structref`） | • 基于 `jenny` 毫秒级沙箱与 `std` 语料构建 Compiler-in-the-Loop **QLoRA SFT + GRPO / RLVR** 强化学习管线，训练 `Jenny-Coder` | ⚪ **规划中** | *(待 `v0.2` 准出后创建 `roadmap_v0.3.md`)* |
 | **`v0.4`** | **`Jenny-Ecosystem`**<br>网络/文件系统标准库与契约审计 IDE 工作台 | • 扩展系统标准库 `std::{fs, net, time, process}` 与 `spindle` 包依赖解析器 | • 升级 `tools/vscode-jenny` 为支持 `.jni` 契约覆盖率可视化与一键 `--diff` 审计的人机协同工作台 | ⚪ **规划中** | *(待 `v0.3` 准出后创建 `roadmap_v0.4.md`)* |
 | **`v1.0`** | **`Jenny-SelfHost`**<br>编译器自举与工业级正式版 | • 使用 Jenny 语言自身（依托 `v0.2`~`v0.4` 建成的 `std::*`）重写编译器核心前端与检查器（`jennyc-self`），实现自举 | • 开源发布 `Jenny v1.0` 工具链、完整 `std` 标准库与微调模型权重 | ⚪ **远期目标** | *(待 `v0.4` 准出后创建 `roadmap_v1.0.md`)* |

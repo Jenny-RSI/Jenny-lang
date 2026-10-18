@@ -19,7 +19,7 @@
 
 ## 📚 Specification Volumes (`v2.0-spec`)
 
-This directory contains the finalized 12-volume **Jenny Language Core Specification (`v2.0-spec`)**:
+This directory contains the finalized 13-volume **Jenny Language Core Specification (`v2.0-spec`)**:
 
 1. **[Volume 01: AI-Native Dual-Track Memory & Parameter Passing Modes (v2.0)](./01_memory_and_ownership.md)**
    * **Completely eliminates nested reference types (`&T` / `&mut T` / `&*T` / `&^T`)!** Decouples memory management into orthogonal "Tri-State Storage Topology (`T` inline value/view, `*T` native single-owner heap, `^T` managed shared heap)" and "Tri-Modal Parameter Passing Intent (**read-only borrow by default**, `mut` in-place mutation, `own` explicit ownership transfer)". Covers automatic stack-bound view inference for slice-bearing structs (eliminating `view struct` and `'a`), three-track closure lifetimes (`fn` / `*fn[own]` / `^fn`), `iter fn (yield)`, pluggable Immix GC / ARC, `*in(arena)`, and `@scoped` linear resources.
@@ -45,6 +45,8 @@ This directory contains the finalized 12-volume **Jenny Language Core Specificat
     * Defines the five quantitative benchmarks (TCR token compression ratio, ECC effective context capacity, $\text{Pass}@1 / \text{Heal}@k$ compilation & self-healing rates, SHR semantic hallucination rate, and HCS human comprehension speed), perplexity- and error-heatmap-driven syntax smoothing, and the Compiler-in-the-Loop RLVR / GRPO co-training closed loop.
 12. **[Volume 12: Package Management, Module Resolution & Supply-Chain Effect Firewall (`Spindle` & `Tapestry.toml`)](./12_package_management_and_module_system.md)**
     * Establishes paired-file (`<mod>.jni` + `<mod>.jn`) module resolution, wildcard import prohibition (`E0501`), circular dependency detection (`E0502`), package-level `allow_effects` supply-chain capability sandboxing in `Tapestry.toml` (`E0503`), dual-hash `Tapestry.lock` (`jni_abi_hash` + `jn_impl_hash`) with Minimum Version Selection (MVS), mechanically verified contract SemVer (`spindle semver-check`, `E0504`), and the `spindle context` AI contract summary export protocol.
+13. **[Volume 13: Semantic Contract-Driven Native Dynamic Linking, Graceful Fallback & Zero-Leak Hot-Swap Architecture (`Jenny-Dylib`)](./13_dynamic_linking_and_semantic_hotswap.md)**
+    * Eliminates the "Six Fatal Flaws of DLL Hell" via dual-layer code separation (concrete functions compiled to machine code, `@spin` thin templates embedded in `.jn_spin` metadata), a unified `jenny_rt` runtime substrate, ABI-hash-namespaced symbols for multi-version coexistence, three-tier runtime Hoare contract handshakes with graceful `catch` fallback, and five-step atomic hot-swapping with deterministic zero-leak unloading (`E0511`–`E0514`).
 
 ---
 

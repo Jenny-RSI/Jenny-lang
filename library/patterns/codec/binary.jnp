@@ -1,0 +1,100 @@
+{
+  "pattern_id": "codec::binary",
+  "kind": "apply_decorator",
+  "description": "Zero-boilerplate deterministic binary wire packet header codec (@apply(codec::binary))",
+  "methods": [
+    {
+      "name": "new",
+      "params": [
+        { "mode": "borrow", "name": "seq_id", "ty": "i64" },
+        { "mode": "borrow", "name": "payload_len", "ty": "i64" }
+      ],
+      "ret_ty": "{Struct}",
+      "err_ty": null,
+      "ensures": [
+        "result.magic == 43981 && result.version == 1"
+      ],
+      "body_template": [
+        "    pub fn new(seq_id: i64, payload_len: i64) -> {Struct} {",
+        "        val csum = ((43981 * 31 + 1 * 17 + seq_id * 13 + payload_len * 7) % 65536 + 65536) % 65536",
+        "        return {Struct} { magic: 43981, version: 1, seq_id: seq_id, payload_len: payload_len, checksum: csum }",
+        "    }"
+      ]
+    },
+    {
+      "name": "wire_size",
+      "params": [
+        { "mode": "borrow", "name": "self", "ty": "{Struct}" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": null,
+      "ensures": [
+        "result == 40"
+      ],
+      "body_template": [
+        "    pub fn wire_size(self) -> i64 {",
+        "        return {wire_bytes}",
+        "    }"
+      ]
+    },
+    {
+      "name": "compute_checksum",
+      "params": [
+        { "mode": "borrow", "name": "self", "ty": "{Struct}" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": null,
+      "ensures": [
+        "result >= 0 && result < 65536"
+      ],
+      "body_template": [
+        "    pub fn compute_checksum(self) -> i64 {",
+        "        return ((self.magic * 31 + self.version * 17 + self.seq_id * 13 + self.payload_len * 7) % 65536 + 65536) % 65536",
+        "    }"
+      ]
+    },
+    {
+      "name": "encode_digest",
+      "params": [
+        { "mode": "borrow", "name": "self", "ty": "{Struct}" }
+      ],
+      "ret_ty": "i64",
+      "err_ty": "CodecError",
+      "ensures": [
+        "result == self.seq_id * 10000 + self.payload_len"
+      ],
+      "body_template": [
+        "    pub fn encode_digest(self) -> i64 ! CodecError {",
+        "        guard self.magic == 43981 else { raise CodecError.InvalidMagic }",
+        "        guard self.payload_len >= 0 && self.payload_len <= 4096 else { raise CodecError.BufferUnderflow }",
+        "        guard self.checksum == 0 || self.checksum == self.compute_checksum() else { raise CodecError.ChecksumMismatch }",
+        "        return self.seq_id * 10000 + self.payload_len",
+        "    }"
+      ]
+    },
+    {
+      "name": "decode_header",
+      "params": [
+        { "mode": "borrow", "name": "raw_magic", "ty": "i64" },
+        { "mode": "borrow", "name": "raw_version", "ty": "i64" },
+        { "mode": "borrow", "name": "seq_id", "ty": "i64" },
+        { "mode": "borrow", "name": "payload_len", "ty": "i64" },
+        { "mode": "borrow", "name": "raw_checksum", "ty": "i64" }
+      ],
+      "ret_ty": "{Struct}",
+      "err_ty": "CodecError",
+      "ensures": [
+        "result.seq_id == seq_id && result.payload_len == payload_len"
+      ],
+      "body_template": [
+        "    pub fn decode_header(raw_magic: i64, raw_version: i64, seq_id: i64, payload_len: i64, raw_checksum: i64) -> {Struct} ! CodecError {",
+        "        guard raw_magic == 43981 else { raise CodecError.InvalidMagic }",
+        "        guard raw_version >= 1 && payload_len >= 0 && payload_len <= 4096 else { raise CodecError.BufferUnderflow }",
+        "        val expected = ((raw_magic * 31 + raw_version * 17 + seq_id * 13 + payload_len * 7) % 65536 + 65536) % 65536",
+        "        guard raw_checksum == expected else { raise CodecError.ChecksumMismatch }",
+        "        return {Struct} { magic: raw_magic, version: raw_version, seq_id: seq_id, payload_len: payload_len, checksum: raw_checksum }",
+        "    }"
+      ]
+    }
+  ]
+}

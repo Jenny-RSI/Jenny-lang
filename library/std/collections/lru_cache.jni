@@ -1,0 +1,110 @@
+# `std::collections::lru_cache` — Bounded Doubly-Linked LRU Cache (`LruCache`)
+
+## 1. Design Intent & Rust `lru::LruCache` Comparison
+
+In Rust's `lru` crate, maintaining a bounded-capacity cache with $O(1)$ MRU promotion and LRU eviction requires a doubly-linked list cross-referenced with a table via raw pointers (`NonNull<LruEntry<K, V>>`) and dozens of `unsafe` blocks to bypass the borrow checker's single-mutable-alias restriction.
+
+In Jenny's `std::collections::lru_cache`, `LruCache` composes `std::mem::raw_buf::RawBuf` (`self.buf.cap == self.capacity * 5`, storing `[active, key, val, prev, next]` per slot) with machine-checked invariants:
+- `invariant self.capacity >= 1 && self.capacity <= 65536`
+- `invariant self.len >= 0 && self.len <= self.capacity`
+- `invariant self.buf.cap == self.capacity * 5`
+- `invariant self.hits >= 0 && self.misses >= 0 && self.evictions >= 0`
+- `get_promote(mut self, key)` promotes the accessed entry to the MRU `head` and increments `hits` (`ensures self.hits == old(self.hits) + 1 && self.mru_key == key`).
+- `put(mut self, key, val)` inserts or updates `key`, evicting the LRU `tail` entry when `self.len == self.capacity` (`ensures self.mru_key == key`).
+
+## 2. Formal Interface & Contracts
+
+```jenny
+module std_collections_lru_cache
+
+import std::mem::raw_buf
+
+pub enum LruError {
+    KeyNotFound,
+    InvalidCapacity,
+}
+
+pub struct LruCache {
+    buf: RawBuf,
+    capacity: i64,
+    len: i64 = 0,
+    head: i64 = -1,
+    tail: i64 = -1,
+    mru_key: i64 = 0,
+    hits: i64 = 0,
+    misses: i64 = 0,
+    evictions: i64 = 0,
+
+    invariant self.capacity >= 1 && self.capacity <= 65536
+    invariant self.len >= 0 && self.len <= self.capacity
+    invariant (self.buf.cap == 0 && self.len == 0) || (self.buf.cap == self.capacity * 5)
+    invariant self.hits >= 0 && self.misses >= 0 && self.evictions >= 0
+}
+
+impl LruCache {
+    pub fn new(capacity: i64) -> LruCache ! LruError
+        effects [AllocNative]
+        requires capacity >= 1 && capacity <= 65536 else LruError.InvalidCapacity
+        ensures result.capacity == capacity && result.len == 0 && result.hits == 0 && result.evictions == 0
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len
+
+    pub fn promote_slot(mut self, slot: i64) -> i64 ! LruError
+        effects [Mutate]
+        requires slot >= 0 && slot < self.len else LruError.KeyNotFound
+        ensures self.head == slot && self.len == old(self.len)
+
+    pub fn put(mut self, key: i64, val: i64) -> i64 ! LruError
+        effects [Mutate]
+        ensures self.len >= 1 && self.len <= self.capacity && self.mru_key == key
+
+    pub fn get_promote(mut self, key: i64) -> i64 ! LruError
+        effects [Mutate]
+        requires self.len > 0 else LruError.KeyNotFound
+        ensures self.hits == old(self.hits) + 1 && self.mru_key == key
+
+    pub fn peek(self, key: i64) -> i64 ! LruError
+        effects []
+        requires self.len > 0 else LruError.KeyNotFound
+
+    pub fn drop_cache(mut self) -> i64
+        effects [Mutate]
+        ensures self.len == 0 && self.buf.cap == 0
+}
+
+@example("EX-STD-LRU-01: LruCache MRU promotion, bounded LRU tail eviction, and zero-leak drop") {
+    var cache = LruCache.new(3)!
+    cache.put(10, 100)!
+    cache.put(20, 200)!
+    cache.put(30, 300)!
+    assert(cache.len() == 3)
+    assert(cache.mru_key == 30)
+    val v10 = cache.get_promote(10)!
+    assert(v10 == 100)
+    assert(cache.mru_key == 10)
+    assert(cache.hits == 1)
+    cache.put(40, 400)!
+    assert(cache.len() == 3)
+    assert(cache.evictions == 1)
+    assert(cache.mru_key == 40)
+    val evicted = cache.peek(20)
+    assert(evicted is Err(LruError.KeyNotFound))
+    assert(cache.peek(10)! == 100)
+    assert(cache.peek(30)! == 300)
+    assert(cache.peek(40)! == 400)
+    cache.drop_cache()
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-LRU-02: LruCache rejects invalid capacity and missing key lookup") {
+    val bad_cap = LruCache.new(0)
+    assert(bad_cap is Err(LruError.InvalidCapacity))
+    var cache = LruCache.new(2)!
+    val e1 = cache.get_promote(99)
+    assert(e1 is Err(LruError.KeyNotFound))
+    cache.drop_cache()
+    assert(active_native_boxes() == 0)
+}
+```

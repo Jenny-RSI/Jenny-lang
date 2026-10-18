@@ -1,0 +1,74 @@
+module std_codec_varint
+
+import std::mem::raw_buf
+
+pub fn zigzag_encode(val: i64) -> i64 {
+    if val >= 0 {
+        return val * 2
+    }
+    return (-val) * 2 - 1
+}
+
+pub fn zigzag_decode(encoded: i64) -> i64 ! CodecError {
+    val half = encoded / 2
+    if encoded % 2 == 0 {
+        return half
+    }
+    return -(half + 1)
+}
+
+impl VarintStream {
+    pub fn with_capacity(cap: i64) -> VarintStream ! CodecError {
+        val b = RawBuf.new(cap)?
+        return VarintStream { buf: b, read_off: 0, write_off: 0 }
+    }
+
+    pub fn unread_bytes(self) -> i64 {
+        return self.write_off - self.read_off
+    }
+
+    pub fn encode_u64(mut self, val: i64) -> i64 ! CodecError {
+        if self.write_off + 10 > self.buf.cap {
+            self.buf.grow(self.write_off + 10)?
+        }
+        val start_off = self.write_off
+        var rem = val
+        while rem >= 128 {
+            val low7 = (rem % 128) + 128
+            self.buf.write_at(self.write_off, low7)?
+            self.write_off += 1
+            rem = rem / 128
+        }
+        self.buf.write_at(self.write_off, rem)?
+        self.write_off += 1
+        return self.write_off - start_off
+    }
+
+    pub fn decode_u64(mut self) -> i64 ! CodecError {
+        var acc = 0
+        var mult = 1
+        var steps = 0
+        while steps < 9 {
+            if self.read_off >= self.write_off {
+                raise CodecError.UnexpectedEof
+            }
+            val byte_val = self.buf.read_at(self.read_off)?
+            self.read_off += 1
+            if byte_val < 128 {
+                acc += byte_val * mult
+                return acc
+            }
+            acc += (byte_val - 128) * mult
+            mult = mult * 128
+            steps += 1
+        }
+        raise CodecError.VarintOverflow
+    }
+
+    pub fn drop_stream(mut self) -> i64 {
+        self.buf.release()
+        self.read_off = 0
+        self.write_off = 0
+        return 0
+    }
+}

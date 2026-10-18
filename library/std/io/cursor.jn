@@ -1,0 +1,54 @@
+module std_io_cursor
+
+import std::mem::raw_buf
+
+impl IoCursor {
+    pub fn new() -> IoCursor {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return IoCursor { buf: b, pos: 0, filled: 0 }
+    }
+
+    pub fn with_capacity(cap: i64) -> IoCursor ! CursorError {
+        val b = RawBuf.new(cap)?
+        return IoCursor { buf: b, pos: 0, filled: 0 }
+    }
+
+    pub fn remaining(self) -> i64 {
+        return self.filled - self.pos
+    }
+
+    pub fn write_word(mut self, val: i64) -> i64 ! CursorError {
+        if self.pos == self.buf.cap {
+            self.buf.grow(self.pos + 1)?
+        }
+        self.buf.write_at(self.pos, val)?
+        self.pos += 1
+        if self.pos > self.filled {
+            self.filled = self.pos
+        }
+        return self.pos
+    }
+
+    pub fn read_word(mut self) -> i64 ! CursorError {
+        val v = self.buf.read_at(self.pos)?
+        self.pos += 1
+        return v
+    }
+
+    pub fn seek_to(mut self, target_pos: i64) -> i64 ! CursorError {
+        self.pos = target_pos
+        return self.pos
+    }
+
+    pub fn rewind(mut self) -> i64 {
+        self.pos = 0
+        return 0
+    }
+
+    pub fn drop_cursor(mut self) -> i64 {
+        self.buf.release()
+        self.pos = 0
+        self.filled = 0
+        return 0
+    }
+}

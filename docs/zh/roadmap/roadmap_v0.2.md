@@ -104,11 +104,16 @@ flowchart TB
 
 ---
 
-## 5. `v0.2` 建议启动顺序（分三阶段推进）
+## 5. `v0.2` 分阶段推进与完成状态
 
-1. **第一阶段（地基与容器核：`std::mem` + `std::collections` + 64KB Immix GC）**：
-   * 先打通跨模块 `import std::*` (`M0.2.1`) 与 64KB Immix GC (`M0.2.2`)，立即动手建设最硬核的 **`std::mem` (`ByteBuf`, `Arena`)** 与 **`std::collections` (`Vec`, `VecDeque`, `HashMap`, `LruCache`)**，并跑通有状态容器 `--fuzz v2` (`M0.2.3`)。
-2. **第二阶段（扩展标准库：`std::str` + `std::io` + `std::codec`）**：
-   * 在 `std::mem` 和 `std::collections` 之上构建零拷贝字符串视图 `StrView`、动态 `StringBuf`、流式缓冲读写器 `BufReader`/`BufWriter`、`PathBuf` 与标准编解码器，验证多模块级联 `.jni` ABI 防火墙与上下文压缩率。
-3. **第三阶段（跨语言同模型大战：Jenny `std` vs Rust `std` 实证与性能评测）**：
+1. ✅ **第一阶段 `v0.2-alpha1`（已完成 2026-10-18：白盒包管理 `Spindle` Phase 1–2 + 64KB Immix GC + `std::mem` & `std::collections`）**：
+   * 验收报告：[`docs/tests/v0.2_alpha1_std_and_spindle_report.md`](../tests/v0.2_alpha1_std_and_spindle_report.md)
+   * 已打通跨模块 `import std::*` (`M0.2.1`)、`Tapestry.toml` 包级 `allow_effects` 供应链权限沙箱（`E0501`~`E0505` 5/5 100% 拦截）、按需可达子图裁剪 `spindle context`（上下文压缩 **81.08%**）、跨文件 `.jni` C99 头文件防火墙（上游修改 `.jn` 下游 0 重检）与真正的 64KB Block + 128B Line Immix 回收器 (`M0.2.2`)；
+   * 已建成 **`std::mem` (`raw_buf`, `arena`)** 与 **`std::collections` (`vec`, `vec_deque`, `hash_map`, `lru_cache`)** 六大标准库模块（对标 Rust `alloc`/`std`，$\text{TCR}_{\text{impl}} = 0.4919$，$\text{ECC}_{\text{self}} = 67.62\%$），100% 通过 **12,000 步有状态容器方法序列 `--fuzz v2`** (`M0.2.3`) 与零内存泄漏审计。
+2. ✅ **第二阶段 `v0.2-alpha2`（已完成 2026-10-18：扩展标准库 `std::str` + `std::io` + `std::codec` 与 `Spindle` Phase 3–4）**：
+   * 验收报告：[`docs/tests/v0.2_alpha2_std_and_semver_report.md`](../tests/v0.2_alpha2_std_and_semver_report.md)
+   * 已完成 **`std::str` (`str_view`, `string_buf`)**、**`std::io` (`cursor`, `buf_io`, `path_buf`)** 与 **`std::codec` (`varint`)** 6 大扩展标准库模块（Phase 2 $\text{TCR}_{\text{impl}} = 0.3587$，全量 12 模块 $\text{TCR}_{\text{impl}} = 0.4388$，$\text{ECC}_{\text{saving}} = 60.96\%$，共 187 条形式化契约）；
+   * 已落地 `Spindle` Phase 3 (`Tapestry.lock` 双哈希锁定 + `spindle semver-check` 契约语义版本验证 `E0506`–`E0509` 4/4 拦截 + `SAFE_PATCH_HOT_SWAP` 热替换识别) 与 Phase 4 (`spindle synthesize` 接口即包按需合成)；
+   * 全仓 37 模块、73 个 `@example`、**27,160 次 `--fuzz v2` 调用（含 12 个 `std` 模块 24,000 步有状态序列）** 100% 零泄漏通过。
+3. 🎯 **第三阶段 `v0.2.0`（下一目标：跨语言同模型大战——Jenny `std` vs Rust `std` 实证与性能评测）**：
    * 在全套 `std` 真实组件上运行 `qwen2.5-coder:3b/7b` 的 **Jenny vs Rust (`rustc`) vs Go 同模型反事实对照实验、消融实验与 `-O3` 运行时性能跑分**，产出 `v0.2` 旗舰实验报告与下一版论文。

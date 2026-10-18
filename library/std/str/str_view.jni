@@ -1,0 +1,101 @@
+# `std::str::str_view` — Zero-Copy Slice Window Over Native `str` (`StrSliceView`)
+
+## 1. Architectural Intent & Rust `core::str` Comparison
+In Rust (`core::str`), sub-slicing `&s[start..end]` panics at runtime if `start > end` or if indices exceed length, while storing sub-slices inside a parser state struct forces contagious `<'a>` lifetime parameters across every AST and lexer type.
+
+In Jenny's `std::str::str_view`, `StrSliceView` encapsulates a zero-copy `(start, len, source_cap)` window over Jenny's native 16-byte `str` slice (`jn_str`) with an inline structural invariant (`self.source_cap >= 0 && self.start >= 0 && self.len >= 0 && self.start + self.len <= self.source_cap`). Every sub-window operation (`sub_slice`, `advance`, `truncate_len`, `slice_str`) is guarded by explicit `requires ... else StrError` contracts and postcondition proofs (`ensures`), guaranteeing zero out-of-bounds panics, zero heap allocations, and zero `<'a>` lifetime contagion.
+
+```jenny
+module std_str_str_view
+
+pub enum StrError {
+    InvalidBounds,
+    SliceOutOfRange,
+    EmptySlice,
+}
+
+pub struct StrSliceView {
+    start: i64 = 0,
+    len: i64 = 0,
+    source_cap: i64 = 0,
+
+    invariant self.source_cap >= 0 && self.start >= 0 && self.len >= 0 && self.start + self.len <= self.source_cap
+}
+
+impl StrSliceView {
+    pub fn from_bounds(start: i64, len: i64, source_cap: i64) -> StrSliceView ! StrError
+        effects []
+        requires source_cap >= 0 && start >= 0 && len >= 0 else StrError.InvalidBounds
+        requires start + len <= source_cap else StrError.SliceOutOfRange
+        ensures result.start == start && result.len == len && result.source_cap == source_cap
+
+    pub fn len(self) -> i64
+        effects []
+        ensures result == self.len && result >= 0
+
+    pub fn is_empty(self) -> bool
+        effects []
+        ensures result == (self.len == 0)
+
+    pub fn end_offset(self) -> i64
+        effects []
+        ensures result == self.start + self.len && result <= self.source_cap
+
+    pub fn advance(mut self, count: i64) -> i64 ! StrError
+        effects [Mutate]
+        requires count >= 0 && count <= self.len else StrError.SliceOutOfRange
+        ensures self.start == old(self.start) + count && self.len == old(self.len) - count && result == self.len
+
+    pub fn truncate_len(mut self, new_len: i64) -> i64 ! StrError
+        effects [Mutate]
+        requires new_len >= 0 && new_len <= self.len else StrError.SliceOutOfRange
+        ensures self.len == new_len && self.start == old(self.start) && result == self.len
+
+    pub fn sub_slice(self, rel_off: i64, sub_len: i64) -> StrSliceView ! StrError
+        effects []
+        requires rel_off >= 0 && sub_len >= 0 else StrError.InvalidBounds
+        requires rel_off + sub_len <= self.len else StrError.SliceOutOfRange
+        ensures result.start == self.start + rel_off && result.len == sub_len && result.source_cap == self.source_cap
+
+    pub fn slice_str(self, raw: str) -> str ! StrError
+        effects []
+        requires raw.len() == self.source_cap else StrError.SliceOutOfRange
+        ensures result.len() == self.len
+}
+
+@example("EX-STD-STRVIEW-01: StrSliceView zero-copy sub-slicing over native str, advance, and truncate") {
+    var view = StrSliceView.from_bounds(4, 20, 64)!
+    assert(view.len() == 20)
+    assert(!view.is_empty())
+    assert(view.end_offset() == 24)
+    val sub = view.sub_slice(2, 8)!
+    assert(sub.start == 6)
+    assert(sub.len == 8)
+    assert(sub.end_offset() == 14)
+    val rem = view.advance(5)!
+    assert(rem == 15)
+    assert(view.start == 9)
+    val tr_len = view.truncate_len(10)!
+    assert(tr_len == 10)
+    assert(view.end_offset() == 19)
+    val req_line = "GET /api/v2/items HTTP/1.1"
+    var http_view = StrSliceView.from_bounds(0, req_line.len(), req_line.len())!
+    val path_view = http_view.sub_slice(4, 13)!
+    val path_s = path_view.slice_str(req_line)!
+    assert(path_s.eq_str("/api/v2/items"))
+}
+
+@example("EX-STD-STRVIEW-02: StrSliceView rejects out-of-range sub-slices and negative offsets") {
+    val e1 = StrSliceView.from_bounds(50, 20, 64)
+    assert(e1 is Err(StrError.SliceOutOfRange))
+    val e2 = StrSliceView.from_bounds(-1, 10, 64)
+    assert(e2 is Err(StrError.InvalidBounds))
+    var view = StrSliceView.from_bounds(0, 12, 32)!
+    val e3 = view.advance(13)
+    assert(e3 is Err(StrError.SliceOutOfRange))
+    val e4 = view.sub_slice(8, 6)
+    assert(e4 is Err(StrError.SliceOutOfRange))
+    val e5 = view.truncate_len(15)
+    assert(e5 is Err(StrError.SliceOutOfRange))
+}
+```

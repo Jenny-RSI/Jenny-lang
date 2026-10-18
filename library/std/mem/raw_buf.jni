@@ -1,0 +1,100 @@
+# `std::mem::raw_buf` — Deterministic Contiguous Heap Buffer (`RawBuf`)
+
+## 1. Design Intent & Rust `alloc::raw_vec::RawVec` Comparison
+
+In Rust's `alloc::raw_vec::RawVec<T>`, managing an uninitialized or partially initialized contiguous heap allocation requires manual `Layout::array::<T>(cap)`, `NonNull<T>`, `std::alloc::{alloc_zeroed, realloc, dealloc}`, and `unsafe` pointer arithmetic across every growth and index path.
+
+In Jenny's `std::mem::raw_buf`, `RawBuf` encapsulates a deterministic native heap allocation (`*T` backing store tracked by `active_native_boxes()`) with machine-checkable `invariant`, `requires`, and `ensures` contracts:
+- Zero-capacity buffers (`cap == 0`) perform **zero heap allocations** (`ptr == 0`).
+- `grow(mut self, min_cap)` performs geometric $2\times$ capacity expansion (`max(4, old_cap * 2, min_cap)`) via `jn_raw_realloc`, preserving existing elements while maintaining a single active native allocation.
+- `release(mut self)` deterministically frees the backing buffer and resets `cap == 0 && ptr == 0`, preventing double-free and memory leaks.
+
+## 2. Formal Interface & Contracts
+
+```jenny
+module std_mem_raw_buf
+
+import std::rt::intrinsics
+
+pub enum MemError {
+    OutOfBounds,
+    CapacityOverflow,
+    InvalidCopyRange,
+}
+
+pub struct RawBuf {
+    ptr: i64 = 0,
+    cap: i64 = 0,
+
+    invariant self.cap >= 0 && self.cap <= 1048576
+    invariant (self.cap == 0 && self.ptr == 0) || (self.cap > 0 && self.ptr != 0)
+}
+
+impl RawBuf {
+    pub fn new(cap: i64) -> RawBuf ! MemError
+        effects [AllocNative]
+        requires cap >= 0 && cap <= 1048576 else MemError.CapacityOverflow
+        ensures result.cap == cap
+
+    pub fn capacity(self) -> i64
+        effects []
+        ensures result == self.cap
+
+    pub fn read_at(self, idx: i64) -> i64 ! MemError
+        effects []
+        requires idx >= 0 && idx < self.cap else MemError.OutOfBounds
+
+    pub fn write_at(mut self, idx: i64, val: i64) -> i64 ! MemError
+        effects [Mutate]
+        requires idx >= 0 && idx < self.cap else MemError.OutOfBounds
+        ensures self.cap == old(self.cap)
+
+    pub fn grow(mut self, min_cap: i64) -> i64 ! MemError
+        effects [Mutate, AllocNative]
+        requires min_cap > 0 && min_cap <= 1048576 else MemError.CapacityOverflow
+        ensures self.cap >= min_cap && self.cap >= old(self.cap)
+
+    pub fn copy_within(mut self, src_off: i64, dst_off: i64, count: i64) -> i64 ! MemError
+        effects [Mutate]
+        requires count >= 0 && src_off >= 0 && dst_off >= 0 else MemError.InvalidCopyRange
+        requires src_off + count <= self.cap && dst_off + count <= self.cap else MemError.OutOfBounds
+        ensures result == count
+
+    pub fn release(mut self) -> i64
+        effects [Mutate, AllocNative]
+        ensures self.cap == 0 && self.ptr == 0
+}
+
+@example("EX-STD-MEM-01: RawBuf geometric 2x growth, copy_within, and zero-leak release") {
+    var buf = RawBuf.new(0)!
+    assert(buf.capacity() == 0)
+    assert(active_native_boxes() == 0)
+    val c1 = buf.grow(3)!
+    assert(c1 == 4)
+    assert(active_native_boxes() == 1)
+    buf.write_at(0, 100)!
+    buf.write_at(1, 200)!
+    buf.write_at(2, 300)!
+    val c2 = buf.grow(6)!
+    assert(c2 == 8)
+    assert(active_native_boxes() == 1)
+    assert(buf.read_at(0)! == 100)
+    assert(buf.read_at(2)! == 300)
+    buf.copy_within(0, 3, 3)!
+    assert(buf.read_at(3)! == 100)
+    assert(buf.read_at(5)! == 300)
+    buf.release()
+    assert(buf.capacity() == 0)
+    assert(active_native_boxes() == 0)
+}
+
+@example("EX-STD-MEM-02: RawBuf rejects out-of-bounds access and capacity overflow") {
+    var buf = RawBuf.new(4)!
+    val bad_read = buf.read_at(4)
+    assert(bad_read is Err(MemError.OutOfBounds))
+    val bad_grow = buf.grow(2000000)
+    assert(bad_grow is Err(MemError.CapacityOverflow))
+    buf.release()
+    assert(active_native_boxes() == 0)
+}
+```

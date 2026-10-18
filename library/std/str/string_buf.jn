@@ -1,0 +1,93 @@
+module std_str_string_buf
+
+import std::rt::intrinsics
+import std::mem::raw_buf
+
+impl StringBuf {
+    pub fn new() -> StringBuf {
+        val b = RawBuf { ptr: 0, cap: 0 }
+        return StringBuf { buf: b, len: 0 }
+    }
+
+    pub fn with_capacity(cap: i64) -> StringBuf ! StringError {
+        val b = RawBuf.new(cap)?
+        return StringBuf { buf: b, len: 0 }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.buf.cap
+    }
+
+    pub fn push_byte(mut self, ch: i64) -> i64 ! StringError {
+        if self.len == self.buf.cap {
+            self.buf.grow(self.len + 1)?
+        }
+        self.buf.write_at(self.len, ch)?
+        self.len += 1
+        return self.len
+    }
+
+    pub fn push_str(mut self, s: str) -> i64 ! StringError {
+        val slen = s.len()
+        if slen > 0 && self.len + slen > self.buf.cap {
+            self.buf.grow(self.len + slen)?
+        }
+        self.len = rt_raw_put_str(self.buf.ptr, self.len, s)
+        return self.len
+    }
+
+    pub fn push_repeat(mut self, ch: i64, count: i64) -> i64 ! StringError {
+        if count > 0 && self.len + count > self.buf.cap {
+            self.buf.grow(self.len + count)?
+        }
+        var i = 0
+        while i < count {
+            self.buf.write_at(self.len + i, ch)?
+            i += 1
+        }
+        self.len += count
+        return self.len
+    }
+
+    pub fn byte_at(self, idx: i64) -> i64 ! StringError {
+        val v = self.buf.read_at(idx)?
+        return v
+    }
+
+    pub fn truncate(mut self, new_len: i64) -> i64 ! StringError {
+        self.len = new_len
+        return self.len
+    }
+
+    pub fn equals_str(self, target: str) -> bool {
+        return rt_raw_eq_str(self.buf.ptr, self.len, target)
+    }
+
+    pub fn to_sso_string(self) -> String {
+        return rt_raw_to_sso_string(self.buf.ptr, 0, self.len)
+    }
+
+    pub fn fnv1a_hash(self) -> i64 {
+        var h = 2166136261
+        var i = 0
+        while i < self.len {
+            val b = rt_raw_get(self.buf.ptr, i)
+            h = ((h ^ b) * 16777619) % 2147483647
+            if h < 0 {
+                h = -h
+            }
+            i += 1
+        }
+        return h
+    }
+
+    pub fn drop_string(mut self) -> i64 {
+        self.buf.release()
+        self.len = 0
+        return 0
+    }
+}

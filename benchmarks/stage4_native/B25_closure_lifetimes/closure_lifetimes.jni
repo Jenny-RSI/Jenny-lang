@@ -1,10 +1,10 @@
 # B25: Three-Track Closure Lifetimes (`closure_lifetimes`)
 
-This module validates the **Three-Track Closure Lifetimes** model defined in the Jenny v2.0 specification ([`01_memory_and_ownership.md`](../../../docs/design/specs/01_memory_and_ownership.md) and [`03_syntax_and_control_flow.md`](../../../docs/design/specs/03_syntax_and_control_flow.md)):
+This module verifies the **Three-Track Closure Lifetime Management Model** defined by the Jenny v2.0 specification ([`01_memory_and_ownership.md`](../../../docs/design/specs/01_memory_and_ownership.md) and [`03_syntax_and_control_flow.md`](../../../docs/design/specs/03_syntax_and_control_flow.md)):
 
-1. **Track 1: Non-Escaping Stack-Borrowed Closure (`fn(i64) -> i64`)** — 16-byte stack fat pointer that captures outer variables by read-only borrow by default with **zero heap allocation and zero GC overhead**, statically forbidding stack-frame escape (`E0205_STACK_CLOSURE_ESCAPE`).
-2. **Track 2: Unique Native Heap Escaping Closure (`*fn(i64) -> i64` and `*fn[own sig](v) => ...`)** — Enforces explicit `[own sig]` ownership transfer for captured unique pointers (`E0206_CLOSURE_MISSING_OWN_CAPTURE`) and performs **deterministic cascading deallocation** of both the closure environment and its owned `*SignalBox` via generated `drop_env` upon `own` consumption.
-3. **Track 3: Managed Shared Heap Escaping Closure (`^fn(i64) -> i64` and `^fn(v) => ...`)** — Governed by the static `effects [AllocGC]` capability contract (`E0204_UNDECLARED_EFFECT`), supporting cross-function return and multi-consumer shared invocation reclaimed by the managed pool.
+1. **Track 1 — Non-Escaping Stack-Borrowed Closures (`fn(i64) -> i64`)**: 16-byte stack fat pointer, read-only borrow capture by default, **0 heap allocations, 0 GC overhead**, statically prevented from escaping across stack frames (`E0205_STACK_CLOSURE_ESCAPE`).
+2. **Track 2 — Unique Native Heap Escaping Closures (`*fn(i64) -> i64` & `*fn[own sig](v) => ...`)**: Enforces explicit `[own sig]` ownership transfer for unique pointers (`E0206_CLOSURE_MISSING_OWN_CAPTURE`), with **deterministic cascade deallocation** of the closure environment and owned `*SignalBox` via generated `drop_env`.
+3. **Track 3 — Managed Shared GC Escaping Closures (`^fn(i64) -> i64` & `^fn(v) => ...`)**: Governed by the `effects [AllocGC]` static capability contract (`E0204_UNDECLARED_EFFECT`), supporting cross-function return and multi-consumer shared invocation with managed pool collection.
 
 ```jenny
 module closure_lifetimes

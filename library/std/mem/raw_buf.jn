@@ -1,0 +1,47 @@
+module std_mem_raw_buf
+
+import std::rt::intrinsics
+
+impl RawBuf {
+    pub fn new(cap: i64) -> RawBuf ! MemError {
+        val p = rt_raw_alloc(cap)
+        return RawBuf { ptr: p, cap: cap }
+    }
+
+    pub fn capacity(self) -> i64 {
+        return self.cap
+    }
+
+    pub fn read_at(self, idx: i64) -> i64 ! MemError {
+        return rt_raw_get(self.ptr, idx)
+    }
+
+    pub fn write_at(mut self, idx: i64, val: i64) -> i64 ! MemError {
+        return rt_raw_set(self.ptr, idx, val)
+    }
+
+    pub fn grow(mut self, min_cap: i64) -> i64 ! MemError {
+        if self.cap >= min_cap {
+            return self.cap
+        }
+        val doubled = if self.cap == 0 { 4 } else { self.cap * 2 }
+        var target = if doubled < min_cap { min_cap } else { doubled }
+        if target > 1048576 {
+            target = 1048576
+        }
+        self.ptr = rt_raw_realloc(self.ptr, self.cap, target)
+        self.cap = target
+        return self.cap
+    }
+
+    pub fn copy_within(mut self, src_off: i64, dst_off: i64, count: i64) -> i64 ! MemError {
+        return rt_raw_copy(self.ptr, dst_off, self.ptr, src_off, count)
+    }
+
+    pub fn release(mut self) -> i64 {
+        val _ = rt_raw_free(self.ptr)
+        self.ptr = 0
+        self.cap = 0
+        return 0
+    }
+}

@@ -1,68 +1,78 @@
-# Jenny 语言规范 —— 模块八：零胶水 C 互操作、WebAssembly 双后端与工程生态 (C Interop, Wasm Dual-Backend & Toolchain Ecosystem)
+# Jenny 语言规范 —— 模块八：白盒化 C 蓝图互操作、WebAssembly 双后端与工程生态 (White-Box C Interop, Wasm Dual-Backend & Toolchain Ecosystem)
 
-> **状态**：已定稿 (v1.0-spec)  
-> **核心理念**：编译器内置 `libclang` 实现免 `bindgen` 的零胶水 C 头文件直导，但**严格强制 `.as_raw_ptr()` 显式指针跨越边界**；在 WebAssembly 后端首创 **Linear Memory (`*T`) + WasmGC (`^T`) + `table<anyref>` 跨堆根表** 的双轨合捻架构；并以 `Tapestry.toml`、`spindle`、`.spun/` 与 AI 自愈诊断协议构筑完整的现代工具链。
+> **状态**：已定稿 (v2.0-spec, 含 `std::ffi::c_abi` 与 `spindle bindgen-c` 实证)  
+> **核心理念**：彻底废除传统业务模块直接引入无法审计的黑盒 C 头文件（`import c "header.h"`）。所有外部 C 库必须先通过 AI + `spindle bindgen-c` 提取为**白盒 `.jni` 蓝图**（像 `std::rt::intrinsics` 与 `std::ffi::c_abi` 一样），原生支持与 C 1:1 内存布局对齐的 **`@repr(C) struct`、`@repr(C) union` 与 `@bits(N)` 位域**，并自动织入前置/后置契约与位宽不变式；在 WebAssembly 后端首创 **Linear Memory (`*T`) + WasmGC (`^T`) + `table<anyref>` 跨堆根表** 的双轨合捻架构。
 
 ---
 
-## 1. 零胶水、显式边界的 C 语言互操作 (`import c`)
+## 1. 白盒化 C 库 `.jni` 蓝图桥接与 1:1 C ABI 内存布局 (`@extern_c` & `spindle bindgen-c`)
 
-### 1.1 内置 Clang AST 映射引擎
-当源码中声明 `import c "sqlite3.h" as sql` 时，Jenny 编译器直接调用内嵌的 `libclang` 前端解析 C 头文件，自动在内存中构建 Jenny 符号表，**无需任何外部胶水代码生成步骤**：
-* **C 结构体与联合体**：自动映射为 `@repr(C) pub struct` 与 `@repr(C) pub union`。
-* **C `#define` 常量与枚举**：数值与字符串字面量宏自动提取为模块级不可变绑定 `pub val`；C `enum` 映射为等宽整数常量集。
-* **C 函数副作用自动染色**：所有通过 `import c` 导入的外部 C 函数，签名自动附加 **`effects [IO, Unsafe]`** 契约。
+### 1.1 为什么废除业务模块直接 `import c "header.h"`？
+若允许普通 `.jn` / `.jni` 模块直接 `import c "header.h"`，外部 C 库将退化为无法静态审计的黑盒依赖：
+* `Spindle` 无法在不解析任意 C 宏预处理器的情况下审计其内存副作用与能力边界；
+* C 头文件缺乏前置条件（`requires`）、后置条件（`ensures`）与结构体位域越界不变式（`invariant`）；
+* 下游调用方无法享受 `.jni` ABI 防火墙带来的 $O(1)$ 契约级语义版本（Contract-Verified SemVer）验证。
 
-### 1.2 严格的显式指针转换铁律 (`.as_raw_ptr()`)
-为了彻底杜绝 Jenny 的安全借用或指针（`T`、`*T`、`[]T`）在开发者不知情时隐式退化为失去生命周期保护的 C 裸指针：
-1. **专用 C 裸指针类型 `*c_raw<T>` 与 `*mut c_raw<T>`**：
-   * C 头文件中的 `const T*` 自动映射为 `*c_raw<T>`；`T*` 映射为 `*mut c_raw<T>`；`void*` 映射为 `*mut c_raw<void>`。
-2. **禁止隐式指针退化，强制显式调用 `.as_raw_ptr()`**：
-   * 将 Jenny 的只读借用 `x: T`、可变借用 `mut x: T`、`*T`、`[]T` 或 `str` 传递给 C 函数时，**必须显式调用 `.as_raw_ptr()` 或 `.as_mut_raw_ptr()`（字符串转为以 `\0` 结尾的 C 字符串则调用 `.as_c_str()`）**！
-   * 这一设计确保每一处跨越 C FFI 边界的裸内存暴露点在代码审查与 AI 静态分析中 100% 显式可见。
+因此，Jenny 规定：**外部 C 库必须先通过 AI 辅助的 `spindle bindgen-c <header.h>` 生成白盒 `.jni` 蓝图模块（如 `std::ffi::c_abi`），业务代码仅 `import` 该白盒 `.jni` 模块！**（低层裸 `import c` 仅保留在受 `Tapestry.toml` `allow_effects = ["Unsafe"]` 显式授权的 FFI 封装层内，违者触发 `E0505_UNDECLARED_FFI_IMPORT`）。
 
-```rust
-module image_loader
+### 1.2 1:1 C ABI 内存布局：`@repr(C)` `struct`、`union` 与 `@bits(N)` 位域
+Jenny 在语言层完整支持 C99 的结构体、联合体与位域（Bitfields），并保证与 C 编译器完全一致的 1:1 物理字节与比特布局：
+1. **`@repr(C) pub struct` 与 `@bits(N)` 位域**：
+   * 字段支持 `@bits(N)`（或 `: N`）显式声明比特宽度（如 `pub version: u32 @bits(4) = 4`），直接降级为 C99 `uint32_t version : 4;`；
+   * 编译器与 `spindle bindgen-c` 自动为每个 `@bits(N)` 位域织入位宽值域不变式 `invariant self.field >= 0 && self.field <= (2^N - 1)`，彻底消除 C 语言位域静默截断导致的逻辑漏洞。
+2. **`@repr(C) pub union` 共享内存视图**：
+   * 原生支持 `pub union Name { ... }`，直接映射为 C99 `typedef union Name { ... } Name;`，支持按指定成员初始化（如 `CWord32Union { raw_u32: val }` 或 `CWord32Union { halves: h }`）及零拷贝跨视图读取，无需像 Rust 那样将所有 `union` 字段读取包裹在冗长的 `unsafe { ... }` 块中。
+3. **`@extern_c("c_symbol")` 白盒契约绑定**：
+   * 在 `.jni` 蓝图中通过 `@extern_c("c_symbol")` 将底层 C 函数绑定为携带 `requires`、`ensures` 与 `effects [FFI]` 的白盒函数签名，编译器自动生成契约检查包装器与 C 符号调用。
 
-import c "stb_image.h" as stbi
+### 1.3 严格的显式指针转换铁律 (`.as_raw_ptr()`)
+为了彻底杜绝 Jenny 的安全借用或指针（`T`、`*T`、`[]T`、`str`）在开发者不知情时隐式退化为失去生命周期保护的 C 裸指针：
+1. 将 Jenny 的切片、`str` 或 `*T` 传递给底层 C FFI 函数时，**必须显式调用 `.as_raw_ptr()`**（违者触发 `E0401_FFI_IMPLICIT_RAW_PTR`）；
+2. 严禁将受管 GC 引用 `^T` 放入 `@repr(C)` 结构体/联合体或跨越 C FFI 边界传递（违者触发 `E0403_FFI_GC_PTR_TO_C`）。
+
+```jenny
+module std_ffi_c_abi
 
 @repr(C)
-pub struct RawImage {
-    pub data: *mut c_raw<u8>,
-    pub width: i32,
-    pub height: i32,
+pub struct CFrameHeader {
+    pub version: u32 @bits(4) = 4
+    pub ihl: u32 @bits(4) = 5
+    pub dscp: u32 @bits(6) = 0
+    pub ecn: u32 @bits(2) = 0
+    pub total_len: u32 @bits(16) = 20
+    pub seq_id: u32 = 0
 
-    fn drop(own self) {
-        if self.data != null {
-            // 调用 C 释放函数：同样显式传递裸指针
-            stbi.stbi_image_free(self.data.as_mut_void_ptr())
-        }
-    }
+    invariant self.version >= 4 && self.version <= 15
+    invariant self.ihl >= 5 && self.ihl <= 15
+    invariant self.dscp >= 0 && self.dscp <= 63
+    invariant self.ecn >= 0 && self.ecn <= 3
+    invariant self.total_len >= 20 && self.total_len <= 65535
+    invariant self.total_len >= self.ihl * 4
 }
 
-pub fn load_png(buf: []u8) -> *RawImage ! LoadError 
-    effects [IO, Unsafe] 
-{
-    var w: i32 = 0
-    var h: i32 = 0
-    var channels: i32 = 0
-
-    // 严格显式边界：必须调用 .as_raw_ptr() 与 .as_mut_raw_ptr() 跨越 C FFI！
-    val pixels = stbi.stbi_load_from_memory(
-        buf.as_raw_ptr(),
-        buf.len.as<i32>(),
-        w.as_mut_raw_ptr(),
-        h.as_mut_raw_ptr(),
-        channels.as_mut_raw_ptr(),
-        4
-    )
-
-    if pixels == null {
-        raise LoadError.DecodeFailed
-    }
-
-    return *RawImage { data: pixels, width: w, height: h }
+@repr(C)
+pub struct CHalfWords {
+    pub low16: u32 @bits(16) = 0
+    pub high16: u32 @bits(16) = 0
 }
+
+@repr(C)
+pub union CWord32Union {
+    pub raw_u32: u32
+    pub halves: CHalfWords
+    pub signed_i32: i32
+}
+
+@extern_c("jenny_c_sizeof_frame")
+pub fn c_sizeof_frame(hdr: CFrameHeader) -> i64
+    ensures result == 8
+
+@extern_c("jenny_c_abi_adler32_words")
+pub fn c_adler32_words(raw_ptr: i64, count: i64) -> i64
+    requires raw_ptr > 0
+    requires count >= 0
+    effects [FFI]
+    ensures result > 0
 ```
 
 ---
@@ -87,22 +97,24 @@ Jenny 的 `*T` 与 `^T` 双轨内存模型在 WebAssembly（Wasm32 / Wasm64）�
 
 ---
 
-## 3. 模块系统与三级正交可见性 (Modules & Visibility)
+## 3. 模块系统、门面重导出与三级正交可见性 (Modules, Re-Exports & Visibility)
 
-### 3.1 模块声明与严禁通配符导入
-1. **单文件自包含模块**：源码文件统一以 **`.jn`** 为后缀，文件首行通过 `module <name>` 声明模块名。
+### 3.1 模块声明、严禁通配符导入与 `pub import` 门面重导出
+1. **双文件白盒模块与小写命名**：每个模块由全小写 `snake_case` 的 `<name>.jni`（蓝图，含 `jenny_decl` 与 `jenny_test` 两章）与 `<name>.jn`（实现）配对组成，首行通过 `module <path>` 声明模块路径。
 2. **显式符号导入（禁止 `import *`）**：
    * 为确保人类与 AI 仅看当前文件顶部即可 100% 确定正文中每一个标识符的来源，Jenny **静态禁止通配符导入（如 `import utils::*`）**。
-   * 仅允许导入模块命名空间（`import std::fs` $\rightarrow$ 调用 `fs::read`）或显式列出符号清单（`import std::sync::{Channel, Mutex}`）。
+   * 仅允许导入模块命名空间（`import std::fs` $\rightarrow$ 调用 `fs::read`）或显式列出符号清单（`import std::collections::{Vec, HashMap}`）。
+3. **`pub import` 子域/包门面重导出（零成本按需符号穿透）**：
+   * 支持在子域门面（如 `std/collections/mod.jni`）或包根门面（`pkg.jni`）的 ```` ```jenny_decl ```` 中书写 `pub import std::collections::vec::{Vec, VecError}`，使调用方直接书写无冗余结巴的 `import std::collections::{Vec}`；编译器在解析时按符号名直达 `vec.jni`，绝不连带解析同目录下未被引用的其他模块。
 
-### 3.2 三级可见性修饰符（默认私有，省略 `priv`）
-为消除满屏 `priv` 关键字带来的视觉噪音，Jenny 采用干净的三级可见性设计：
+### 3.2 三级可见性修饰符（默认模块内私有，仅存于 `.jn`）
+为消除满屏 `priv` 关键字带来的视觉噪音并保持 `.jni` 蓝图绝对纯净，Jenny 采用严格物理分流的三级可见性设计：
 
-| 修饰符写法 | 可见性范围 | 适用对象 |
+| 修饰符写法 | 可见性范围 | 物理落盘位置与编译规则 |
 | :--- | :--- | :--- |
-| **无修饰符（默认）** | **模块内私有 (Module-Private)** | 仅当前 `.jn` 模块文件内部可访问（无需书写 `priv` 关键字） |
-| **`pkg`** | **包内跨模块可见 (Package-Internal)** | 当前 `Tapestry.toml` 工程包内的所有模块均可访问，但对外部依赖方隐藏 |
-| **`pub`** | **完全公开导出 (Public API)** | 对包外依赖方可见（`pub fn` 强制要求显式声明全部 `effects [...]`） |
+| **无修饰符（默认 `fn` / `struct`）** | **模块内私有 (Module-Private)** | **仅存在于 `<mod>.jn` 实现文件内部（严禁出现在 `<mod>.jni` 蓝图中）**；编译器自动推导其 `effects` 并在 C99/Native 后端降级为 `static` 内部符号 |
+| **`pkg`** | **包内跨模块可见 (Package-Internal)** | 在 `<mod>.jni` 的 `jenny_decl` 中声明，当前 `Tapestry.toml` 包内所有模块可访问，对包外依赖方隐藏（`E0504`） |
+| **`pub`** | **完全公开导出 (Public API)** | 在 `<mod>.jni` 的 `jenny_decl` 中声明（`pub fn` 强制显式声明 `effects [...]`），对包外依赖方公开可见 |
 
 ---
 

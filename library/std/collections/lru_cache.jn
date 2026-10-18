@@ -1,0 +1,136 @@
+module std_collections_lru_cache
+
+import std::mem::raw_buf
+
+impl LruCache {
+    pub fn new(capacity: i64) -> LruCache ! LruError {
+        val b = RawBuf.new(capacity * 5)?
+        return LruCache {
+            buf: b,
+            capacity: capacity,
+            len: 0,
+            head: -1,
+            tail: -1,
+            mru_key: 0,
+            hits: 0,
+            misses: 0,
+            evictions: 0
+        }
+    }
+
+    pub fn len(self) -> i64 {
+        return self.len
+    }
+
+    pub fn promote_slot(mut self, slot: i64) -> i64 ! LruError {
+        val k = self.buf.read_at(slot * 5 + 1)?
+        self.mru_key = k
+        if self.head == slot {
+            return slot
+        }
+        val prev_s = self.buf.read_at(slot * 5 + 3)?
+        val next_s = self.buf.read_at(slot * 5 + 4)?
+        if prev_s >= 0 {
+            self.buf.write_at(prev_s * 5 + 4, next_s)?
+        }
+        if next_s >= 0 {
+            self.buf.write_at(next_s * 5 + 3, prev_s)?
+        }
+        if self.tail == slot {
+            self.tail = prev_s
+        }
+        self.buf.write_at(slot * 5 + 3, -1)?
+        self.buf.write_at(slot * 5 + 4, self.head)?
+        if self.head >= 0 {
+            self.buf.write_at(self.head * 5 + 3, slot)?
+        }
+        self.head = slot
+        if self.tail < 0 {
+            self.tail = slot
+        }
+        return slot
+    }
+
+    pub fn put(mut self, key: i64, val: i64) -> i64 ! LruError {
+        var s = 0
+        while s < self.len {
+            val active = self.buf.read_at(s * 5)?
+            if active == 1 {
+                val cur_k = self.buf.read_at(s * 5 + 1)?
+                if cur_k == key {
+                    self.buf.write_at(s * 5 + 2, val)?
+                    self.promote_slot(s)?
+                    return self.len
+                }
+            }
+            s += 1
+        }
+        if self.len < self.capacity {
+            val new_s = self.len
+            self.buf.write_at(new_s * 5, 1)?
+            self.buf.write_at(new_s * 5 + 1, key)?
+            self.buf.write_at(new_s * 5 + 2, val)?
+            self.buf.write_at(new_s * 5 + 3, -1)?
+            self.buf.write_at(new_s * 5 + 4, self.head)?
+            if self.head >= 0 {
+                self.buf.write_at(self.head * 5 + 3, new_s)?
+            }
+            self.head = new_s
+            if self.tail < 0 {
+                self.tail = new_s
+            }
+            self.len += 1
+            self.mru_key = key
+            return self.len
+        }
+        val evict_s = self.tail
+        self.evictions += 1
+        self.buf.write_at(evict_s * 5 + 1, key)?
+        self.buf.write_at(evict_s * 5 + 2, val)?
+        self.promote_slot(evict_s)?
+        return self.len
+    }
+
+    pub fn get_promote(mut self, key: i64) -> i64 ! LruError {
+        var s = 0
+        while s < self.len {
+            val active = self.buf.read_at(s * 5)?
+            if active == 1 {
+                val cur_k = self.buf.read_at(s * 5 + 1)?
+                if cur_k == key {
+                    val v = self.buf.read_at(s * 5 + 2)?
+                    self.hits += 1
+                    self.promote_slot(s)?
+                    return v
+                }
+            }
+            s += 1
+        }
+        self.misses += 1
+        raise LruError.KeyNotFound
+    }
+
+    pub fn peek(self, key: i64) -> i64 ! LruError {
+        var s = 0
+        while s < self.len {
+            val active = self.buf.read_at(s * 5)?
+            if active == 1 {
+                val cur_k = self.buf.read_at(s * 5 + 1)?
+                if cur_k == key {
+                    val v = self.buf.read_at(s * 5 + 2)?
+                    return v
+                }
+            }
+            s += 1
+        }
+        raise LruError.KeyNotFound
+    }
+
+    pub fn drop_cache(mut self) -> i64 {
+        self.buf.release()
+        self.len = 0
+        self.head = -1
+        self.tail = -1
+        return 0
+    }
+}

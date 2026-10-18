@@ -8,7 +8,7 @@
   ],
   "repository": {
     "jenny-code-block": {
-      "begin": "(^|\\G)(\\s*)(\\`{3,}|~{3,})\\s*(?i:(jenny|jn|jni)((\\s+|:|,|\\{|\\?)[^`~]*)?$)",
+      "begin": "(^|\\G)(\\s*)(\\`{3,}|~{3,})\\s*(?i:(jenny_decl|jenny_test|jenny|jn|jni)((\\s+|:|,|\\{|\\?)[^`~]*)?$)",
       "name": "markup.fenced_code.block.markdown",
       "end": "(^|\\G)(\\2|\\s{0,3})(\\3)\\s*$",
       "beginCaptures": {
