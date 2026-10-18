@@ -34,7 +34,7 @@
 ## 3. Dual-Track Milestones & Gate Criteria
 
 ### 🛠️ Track 1: Compiler & Runtime Hardening (`Compiler Track v0.2`)
-* **`M0.2.1` (Multi-Module Package System & Container Generics)**: Support `import std::*`, cross-file `.jni` header generation (`.jenny-cache/c99/std_<mod>.h`), `.jni` ABI firewall across multi-file DAGs, and parameterized containers.
+* **`M0.2.1` (Package Manager `spindle` & `Tapestry.toml`, Multi-Module Linking & Container Generics — see [Spec Volume 12](../design/specs/12_package_management_and_module_system.md))**: Implement `Tapestry.toml` manifest parsing, dual-hash `Tapestry.lock` (`jni_abi_hash` + `jn_impl_hash`), package-level `allow_effects` supply-chain sandboxing (`E0503`), `import std::*` & `pkg.jni` facade re-exports (`pub import`), static checks `E0501`–`E0505`, cross-file C99 header generation (`.jenny-cache/c99/<pkg>__<mod>.h`), and generic containers.
 * **`M0.2.2` (True 64KB Block-Structured Immix GC & Sanitizer Gate)**: Replace the 1,024-slot `calloc` table in `jenny_rt.h` with a 64KB block / 128B line Immix bump-pointer + mark-region sweep collector supporting $\ge 100,000$ cyclic node allocations/evictions under `clang -fsanitize=address,undefined`.
 * **`M0.2.3` (Stateful Container Method-Sequence Fuzzing `--fuzz v2` & `--diff`)**: Synthesize 10,000-step random method sequences (`push`/`pop`/`insert`/`get`/`remove`/`seek`) for stateful `struct` types, checking `invariant` and `ensures(old)` after every step, plus `jenny diff` binary regression.
 * **`M0.2.4` (Unified `jenny` CLI & All-Paths `E0108 v2`)**: Unify `jenny_nano.py` and `jenny_flow.py` into a single `jenny` CLI and upgrade `E0108` to verify field assignments across all non-error control-flow branches.

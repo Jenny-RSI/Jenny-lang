@@ -52,9 +52,9 @@ pub fn load_png(buf: []u8) -> *RawImage ! LoadError
     val pixels = stbi.stbi_load_from_memory(
         buf.as_raw_ptr(),
         buf.len.as<i32>(),
-        (mut w).as_mut_raw_ptr(),
-        (mut h).as_mut_raw_ptr(),
-        (mut channels).as_mut_raw_ptr(),
+        w.as_mut_raw_ptr(),
+        h.as_mut_raw_ptr(),
+        channels.as_mut_raw_ptr(),
         4
     )
 

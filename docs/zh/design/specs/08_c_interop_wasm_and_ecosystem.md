@@ -14,11 +14,11 @@
 * **C 函数副作用自动染色**：所有通过 `import c` 导入的外部 C 函数，签名自动附加 **`effects [IO, Unsafe]`** 契约。
 
 ### 1.2 严格的显式指针转换铁律 (`.as_raw_ptr()`)
-为了彻底杜绝 Jenny 的安全引用（`&T`、`*T`、`[]T`）在开发者不知情时隐式退化为失去生命周期保护的 C 裸指针：
+为了彻底杜绝 Jenny 的安全借用或指针（`T`、`*T`、`[]T`）在开发者不知情时隐式退化为失去生命周期保护的 C 裸指针：
 1. **专用 C 裸指针类型 `*c_raw<T>` 与 `*mut c_raw<T>`**：
    * C 头文件中的 `const T*` 自动映射为 `*c_raw<T>`；`T*` 映射为 `*mut c_raw<T>`；`void*` 映射为 `*mut c_raw<void>`。
 2. **禁止隐式指针退化，强制显式调用 `.as_raw_ptr()`**：
-   * 将 Jenny 的 `&T`、`&mut T`、`*T`、`[]T` 或 `str` 传递给 C 函数时，**必须显式调用 `.as_raw_ptr()` 或 `.as_mut_raw_ptr()`（字符串转为以 `\0` 结尾的 C 字符串则调用 `.as_c_str()`）**！
+   * 将 Jenny 的只读借用 `x: T`、可变借用 `mut x: T`、`*T`、`[]T` 或 `str` 传递给 C 函数时，**必须显式调用 `.as_raw_ptr()` 或 `.as_mut_raw_ptr()`（字符串转为以 `\0` 结尾的 C 字符串则调用 `.as_c_str()`）**！
    * 这一设计确保每一处跨越 C FFI 边界的裸内存暴露点在代码审查与 AI 静态分析中 100% 显式可见。
 
 ```rust
@@ -32,7 +32,7 @@ pub struct RawImage {
     pub width: i32,
     pub height: i32,
 
-    fn drop(mut self) {
+    fn drop(own self) {
         if self.data != null {
             // 调用 C 释放函数：同样显式传递裸指针
             stbi.stbi_image_free(self.data.as_mut_void_ptr())
@@ -51,9 +51,9 @@ pub fn load_png(buf: []u8) -> *RawImage ! LoadError
     val pixels = stbi.stbi_load_from_memory(
         buf.as_raw_ptr(),
         buf.len.as<i32>(),
-        (&mut w).as_mut_raw_ptr(),
-        (&mut h).as_mut_raw_ptr(),
-        (&mut channels).as_mut_raw_ptr(),
+        w.as_mut_raw_ptr(),
+        h.as_mut_raw_ptr(),
+        channels.as_mut_raw_ptr(),
         4
     )
 

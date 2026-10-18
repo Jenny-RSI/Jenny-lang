@@ -9,9 +9,12 @@
 
 ## 🌟 什么是 Jenny？
 
-当前基于传统编程语言的“Vibe Coding”面临严峻的 **工程落地悖论**：现有主流语言（C/C++、Rust、Go）均为人类手写键盘输入设计，AI 生成时易陷入借用检查死循环或产生静默漏洞；同时 AI 极快的生成速度远超人类逐行阅读与审计的生理极限，导致 **人类与 AI 双双在黑暗中抓瞎**。
+**Spinning Jenny（简称 `Jenny`，源码后缀 `.jn` / 蓝图后缀 `.jni`）** 是一门重构“人机分工第一性原理”的 **AI 原生系统级多范式编程语言**。
 
-**Spinning Jenny（简称 `Jenny`，蓝图后缀 `.jni` / 实现后缀 `.jn`）** 是一门遵循 **“人类与架构大模型定义意图与契约（`.jni`） $\times$ 编码小模型自动生成幕后实现（`.jn`） $\times$ 编译器执行零信任契约验收（`jenny`）”** 范式的 **AI 原生系统级编程语言**。
+传统编程语言建立在“人类手敲每一行代码”的旧假设之上，AI对于人类自然语言的模糊和不确定依靠脑补去生成代码，同时AI极快的生成速度远超人类逐行阅读与审计的生理极限，导致**人类与AI双双在黑暗中抓瞎**，被戏称为VibeCoding。是时候改变这种现状了， Jenny 从诞生之初就专为 **“人类与架构大模型定义意图与契约（`.jni`） $\times$ 编码小模型自动生成幕后实现（`.jn`） $\times$ 编译器执行零信任契约验收（`jenny`）”** 的新时代范式而设计。创新性的将五大硬核量化指标做为语言设计演化的目标，以数据驱动语言自进化。将代码的生产效率提升10倍以上，彻底解放AI时代的生产力。
+
+* **当前完成版本**：**`v0.1` (`Jenny-Proto v0.1.0`，已完成 ✅)** —— 详见 [`docs/roadmap/roadmap_v0.1.md`](./docs/roadmap/roadmap_v0.1.md) 与学术论文 [`docs/paper/spinning_jenny_paper_zh.md`](./docs/paper/spinning_jenny_paper_zh.md)（[English Paper](./docs/paper/spinning_jenny_paper_en.md)）。
+* **下一目标版本**：**`v0.2` (`Jenny-Std`：以构建 `std` 标准库为真实战场并全面对标 Rust `std`)** —— 详见 [`docs/roadmap/roadmap_v0.2.md`](./docs/roadmap/roadmap_v0.2.md)。
 
 ---
 

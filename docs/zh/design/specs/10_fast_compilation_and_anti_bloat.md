@@ -49,7 +49,7 @@ Jenny 的 **“`.jni`（文学化蓝图）与 `.jn`（幕后实现）物理分�
 ### 3.2 值类型 `T` 与 `*T`：Debug 字典传递 vs Release 单态化
 | 构建模式 | 泛型编译策略 | 编译耗时与中间体积表现 |
 | :--- | :--- | :--- |
-| **`jenny check` / `jenny weave` / `jenny build --debug`**（日常开发与 AI 自愈模式） | **默认开启 `@dynamic` 字典传递模式（Witness Table + 尺寸描述符）** | 泛型函数 `fn sort<T: Comparable>(arr: &mut []T)` 在整个项目中**仅编译 1 次**！彻底免除 LLVM 重复优化数千个单态化副本的开销，中间 `.o` 体积缩小 **80%**，AI 改码后的验证反馈缩短至 **50~200 毫秒**！ |
+| **`jenny check` / `jenny weave` / `jenny build --debug`**（日常开发与 AI 自愈模式） | **默认开启 `@dynamic` 字典传递模式（Witness Table + 尺寸描述符）** | 泛型函数 `fn sort<T: Comparable>(mut arr: []T)` 在整个项目中**仅编译 1 次**！彻底免除 LLVM 重复优化数千个单态化副本的开销，中间 `.o` 体积缩小 **80%**，AI 改码后的验证反馈缩短至 **50~200 毫秒**！ |
 | **`jenny build --release`**（生产发布模式） | **开启静态单态化（Monomorphization）+ 跨模块 LTO 内联** | 针对所有值类型与 `*T` 实例生成专用机器码，完全消除虚表间接跳转并解锁 SIMD 自动向量化（用户显式标注 `@dynamic` 以缩减 Wasm 体积的函数除外）。 |
 
 ---

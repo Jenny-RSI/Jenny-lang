@@ -16,16 +16,16 @@
 
 ---
 
-## 📚 规范分卷索引 (Specification Volumes)
+## 📚 规范分卷索引 (Specification Volumes `v2.0-spec`)
 
-本目录收录了经过逐模块深度推演与拍板定稿的 **Jenny 语言核心规范（v1.0-spec）**：
+本目录收录了经过逐模块深度推演与拍板定稿的 **Jenny 语言核心规范（`v2.0-spec`，共 12 卷）**：
 
 1. **[模块一：AI 原生双轨内存与参数意图模型 (v2.0)](./01_memory_and_ownership.md)**
-   * **彻底废除 `&T` / `&mut T` / `&*T` 套娃引用类型**！解耦为“三态存储拓扑（`T` 值/视图、`*T` 原生独占堆、`^T` 托管共享堆）”与“三态参数传递意图（**默认只读借用**、`mut` 原地修改、`own` 显式移交所有权）”；编译器自动推导含切片的栈绑定视图（免手写 `view struct` 与 `'a`）、`iter fn (yield)`、可插拔 Immix GC / ARC、`*in(arena)` 与 `@scoped` 线性资源。
+   * **彻底废除 `&T` / `&mut T` / `&*T` 套娃引用类型**！解耦为“三态存储拓扑（`T` 值/视图、`*T` 原生独占堆、`^T` 托管共享堆）”与“三态参数传递意图（**默认只读借用**、`mut` 原地修改、`own` 显式移交所有权）”；编译器自动推导含切片的栈绑定视图（免手写 `view struct` 与 `'a`）、三轨闭包生命期（`fn` / `*fn[own]` / `^fn`）、`iter fn (yield)`、可插拔 Immix GC / ARC、`*in(arena)` 与 `@scoped` 线性资源。
 2. **[模块二：基础类型系统与代数数据类型 (ADT)](./02_types_and_adt.md)**
    * 标量类型与 `.as<T>()` 显式转换、`[N]T` vs `[]T` vs `Array<T>`、24 字节 SSO 不可变 `String` 与 `str`、`struct` 字段默认值、三态接收者适配（`self` / `mut self` / `own self`）、带负载和类型 `enum` 与 8 字节空位优化、`match` 穷尽匹配、`is` 模式条件测试运算符、`guard ... else` 线性守卫。
 3. **[模块三：词法、正交语法与控制流](./03_syntax_and_control_flow.md)**
-   * `val` / `var`、无分号续行规则、废除 `? :` 与 `++`、具名函数强制显式 `return`、`if/else` 与 `match` 值表达式、`for .. in` 与 `while` 唯一循环原语、100% 收口于 `drop(own self)` 的 RAII（不设 `defer`）、`fn(x) => ...` 闭包与 `fn[own ptr]` 捕获、`x |> f(a, _)` 管道操作符。
+   * `val` / `var`、无分号续行规则、废除 `? :` 与 `++`、具名函数强制显式 `return`、`if/else` 与 `match` 值表达式、`for .. in` 与 `while` 唯一循环原语、100% 收口于 `drop(own self)` 的 RAII（不设 `defer`）、`fn(x) => ...` 闭包与 `*fn[own ptr]` 捕获、`x |> f(a, _)` 管道操作符。
 4. **[模块四：Trait 契约、泛型系统与容器适配](./04_traits_and_generics.md)**
    * `trait` 关联类型与直观的 `T.Item` 点号投影、`delegate` 自动组合委托、包级孤儿规则、`@operator("+")` 方法注解与高内聚领域接口（`Numeric`/`Comparable`）、动态多态胖指针（`dyn Trait` / `*dyn Trait` / `^dyn Trait`）、Debug 默认字典传递 + Release 单态化 + `^T` 同构指针擦除、内建三态合成特征（`TrivialCopy`/`UniqueMove`/`GcTrace`）。
 5. **[模块五：三层渐进式错误截断与静态副作用契约系统 (v2.0)](./05_errors_and_effects.md)**
@@ -35,13 +35,15 @@
 7. **[模块七：并发模型（`Fiber`、结构化异步与无数据竞争并行）](./07_concurrency_and_fiber.md)**
    * `effects [Async]` 无栈协程状态机、显式后缀 `.await`（如 `fetch().await?`）、`std::fiber::scope` 结构化并发（安全共享父栈只读参数 + 兄弟任务失败级联取消）、双轨内存跨线程无数据竞争检查（`own *T` 零拷贝移动、不可变 `^T` 共享、可变 `^T` 静态拦截）、标准库 `Channel<T>` 与 `par_map`。
 8. **[模块八：零胶水 C 互操作、WebAssembly 双后端与工程生态](./08_c_interop_wasm_and_ecosystem.md)**
-   * 内置 `libclang` 零胶水 `import c`、强制 `.as_raw_ptr()` 显式跨越 C 指针边界、Wasm Linear Memory (`*T`) + WasmGC (`^T`) + `table<anyref>` 跨堆根表映射、`@export(wasm)` 自动生成 WIT 与 `.d.ts`、三级可见性（默认私有 / `pkg` / `pub`）、`Tapestry.toml` 与 `spindle`、`jenny skeleton` 与 `--ai-json` 确定性修复补丁。
+   * 内置 `libclang` 零胶水 `import c`、强制 `.as_raw_ptr()` 显式跨越 C 指针边界、Wasm Linear Memory (`*T`) + WasmGC (`^T`) + `table<anyref>` 跨堆根表映射、`@export(wasm)` 自动生成 WIT 与 `.d.ts`、三级可见性（默认私有 / `pkg` / `pub`）、`jenny skeleton` 与 `--ai-json` 确定性修复补丁。
 9. **[模块九：文学化架构蓝图（`.jni`）与一等公民契约系统](./09_literate_blueprint_and_contracts.md)**
    * `.jni` 顶层原生 Markdown 自由文档 + 可折叠 ```` ```jenny ```` 形式化契约块、`.jni` 与 `.jn` 双向同构绑定、`requires ... else` 前置契约自动错误织入、`ensures (result / old)` 后置保证、`invariant` 结构不变量、`@example` 编译期 Meta-VM 沙箱即时验收、以及“三步渐进式纺纱（Intent $\rightarrow$ Spec $\rightarrow$ Weave）”工作流。
 10. **[模块十：极速增量构建与零膨胀中间产物架构](./10_fast_compilation_and_anti_bloat.md)**
     * 深度复盘 Rust `target/` 膨胀五大病灶；确立 `.jni` 蓝图编译防火墙（实现改动下游零重编）、泛型“Debug 默认字典传递 vs Release 单态化”双模引擎、内置字节码 Meta-VM 免动态库膨胀、默认轻量行号表（Line-Tables-Only）与 Split DWARF、以及默认硬上限 2GB 的 LRU 内容寻址构建缓存池（`.jenny-cache/`）。
 11. **[模块十一：语言-模型联合演进与量化实证工程 (PL-LLM Co-Design)](./11_llm_codesign_and_empirical_training.md)**
     * 确立五大硬性量化标尺（TCR Token 压缩比、ECC 有效上下文架构容量、$\text{Pass}@1 / \text{Heal}@k$ 编译自愈率、SHR 语义幻觉率、HCS 人类意图审计效率）、基于基座模型困惑度（Perplexity）与报错码热力图的语法磨平机制、以及编译器内嵌可验证奖励强化学习（Compiler-in-the-Loop RLVR / GRPO）双向协同训练闭环。
+12. **[模块十二：包管理、模块解析与供应链效应防火墙 (`Spindle` & `Tapestry.toml`)](./12_package_management_and_module_system.md)**
+    * 确立双文件（`<mod>.jni` + `<mod>.jn`）模块映射法则、禁止通配符导入（`E0501`）与环状依赖拦截（`E0502`）、`Tapestry.toml` 包级 `allow_effects` 供应链权限沙箱（`E0503`）、`Tapestry.lock` 双哈希（`jni_abi_hash` + `jn_impl_hash`）与最小版本选择（MVS）、`spindle semver-check` 机械化契约语义版本校验（`E0504`）、以及 `spindle context` AI 契约摘要导出协议。
 
 ---
 

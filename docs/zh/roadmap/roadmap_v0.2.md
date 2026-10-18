@@ -70,8 +70,9 @@ flowchart TB
 
 ### 🛠️ 第一轨：编译器与运行时硬化轨 (`Compiler Track v0.2`)
 
-1. **`M0.2.1`：多模块包系统 (`import std::*`)、跨文件 `.jni` 编译防火墙与容器类型支持**
-   * 实现 `import std::mem`、`import std::collections` 等跨文件模块解析：编译上游模块的 `.jni` 生成 C99 头文件 `.jenny-cache/c99/std_<mod>.h`，下游模块仅依赖 `.jni` 接口签名与 `jni_abi_hash`。
+1. **`M0.2.1`：包管理系统（`spindle` & `Tapestry.toml`）、跨文件 `import std::*` 与容器类型支持（参见 [模块十二规范](../design/specs/12_package_management_and_module_system.md)）**
+   * 实现 `Tapestry.toml` 清单解析、`Tapestry.lock` 双哈希锁定（`jni_abi_hash` + `jn_impl_hash`）与包级 `allow_effects` 供应链权限防火墙（**`E0503_PACKAGE_EFFECT_ESCALATION`**）；
+   * 实现 `import std::mem`、`import std::collections::{Vec, HashMap}` 与 `pkg.jni` 门面重导出（`pub import`），静态拦截通配符导入（**`E0501`**）、模块循环依赖（**`E0502`**）与跨包可见性越权（**`E0505`**），自动生成 C99 接口头文件 `.jenny-cache/c99/<pkg>__<mod>.h`；
    * 支持标准库容器所需的基础泛型/单态化或类型参数化模板（如 `Vec<T>`、`HashMap<K, V>`、`Option<T>`）。
 2. **`M0.2.2`：真正的 64KB 块/行结构 Immix 回收器 (`jenny_rt.h`) 与 Sanitizer 安全门禁**
    * 彻底替换 `jenny_rt.h` 中 1,024 槽位的 `calloc` 注册表，实现 **64KB Block + 128B Line 线性碰撞分配（Bump Allocation）与标记-区域回收（Mark-Region Sweep）**，支撑 `std::collections::LruCache` 和 `BTreeMap` 进行 **$\ge 100,000$ 次动态节点分配、淘汰与循环回收**。

@@ -13,6 +13,15 @@
 
 ## 🌟 Why Spinning Jenny?
 
+**Spinning Jenny (`Jenny`; implementation files `.jn`, blueprint files `.jni`)** is an **AI-native, multi-paradigm systems programming language** that rebuilds the human/AI division of labor from first principles.
+
+Traditional languages assume that a human types every line of code. When an AI fills in the ambiguity and uncertainty of natural language by guessing, and generates code far faster than a human can read or audit it, **humans and AI end up working blind together**, which is jokingly called "Vibe Coding". Jenny was designed from day one for a different paradigm: **humans and architect models define intent and contracts (`.jni`) x small coding models synthesize the implementation behind the scenes (`.jn`) x the compiler performs zero-trust contract acceptance (`jenny`)**. It adopts five hard quantitative metrics as the targets of language evolution, so that data drives the language to evolve itself, aiming for a 10x or greater gain in code production efficiency.
+
+* **Latest completed version**: **`v0.1` (`Jenny-Proto v0.1.0`, completed)**. See [`docs/roadmap/roadmap_v0.1.md`](./docs/roadmap/roadmap_v0.1.md) and the technical paper ([English](./docs/paper/spinning_jenny_paper_en.md) | [Chinese](./docs/paper/spinning_jenny_paper_zh.md)).
+* **Next target version**: **`v0.2` (`Jenny-Std`: building the `std` standard library as the real proving ground, benchmarked against Rust `std`)**. See [`docs/roadmap/roadmap_v0.2.md`](./docs/roadmap/roadmap_v0.2.md).
+
+### Why it exists
+
 Unstructured LLM-assisted software development ("Vibe Coding") faces a severe **Engineering Deployment Paradox**:
 1. **Human-Centric Languages Cause LLM Hallucinations**: Mainstream systems languages (C/C++, Rust, Go) were designed for human keyboard entry rather than autoregressive token generation. C/C++ lacks compile-time memory safety; Rust's symbolic borrow checker (`&T`, `&mut T`), explicit lifetime parameters (`<'a>`), and single-owner tree constraints frequently trap LLMs in multi-round compilation failures; and Go's repetitive `if err != nil` boilerplate inflates context budgets.
 2. **Human Audit Blindness**: LLMs emit hundreds of lines of code per second—far beyond human line-by-line review capacity. When architectural intent, interface contracts, and low-level implementation details are entangled inside a single source file, **both humans and AI operate in mutual blindness**, causing catastrophic alignment drift between human intent and generated systems.
@@ -137,6 +146,7 @@ jenny/
   * [09 — Literate Blueprints (`.jni`) & First-Class Contracts](./docs/design/specs/09_literate_blueprint_and_contracts.md)
   * [10 — Fast Incremental Compilation & Anti-Bloat Architecture](./docs/design/specs/10_fast_compilation_and_anti_bloat.md)
   * [11 — PL-LLM Co-Design & Empirical Training Flywheel](./docs/design/specs/11_llm_codesign_and_empirical_training.md)
+  * [12 — Package Management, Module Resolution & Effect Firewall (`Spindle` & `Tapestry`)](./docs/design/specs/12_package_management_and_module_system.md)
 
 ---
 
