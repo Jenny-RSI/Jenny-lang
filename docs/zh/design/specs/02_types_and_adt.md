@@ -43,10 +43,10 @@
 
 #### 1. 三级序列下标访问模型
 
-| 层级与语法 | 函数签名与效应 | 编译期与运行期行为语义 |
+| 层级与语法 | 函数签名与副作用 | 编译期与运行期行为语义 |
 | :--- | :--- | :--- |
-| **1. 显式受检访问**<br>`seq.get(i)` / `seq.get_opt(i)` | `-> T ! BoundsError` 或 `-> T?`<br>*(无 `Unsafe` 效应)* | 100% 边界安全，越界通过值返回错误链或 `null` 显式处理，适合外部不可信索引输入。 |
-| **2. 默认安全下标**<br>`seq[i]` / `seq[i] = val` | `-> T` / `-> void`<br>*(无 `Unsafe` 效应)* | **语义上 100% 受边界保护**；但**若编译期边界证明器（`Jenny-BoundsProver`）证明当前支配路径满足 $0 \le i < \text{seq.len}$，编译器自动消去运行期比较分支（Zero-Cost Bounds Check Elision，直接生成单条寻址指令 `*(seq.ptr + i)`）**；仅当无法静态得证时保留单条无符号比较指令 `cmp i, len; jae trap`。 |
+| **1. 显式受检访问**<br>`seq.get(i)` / `seq.get_opt(i)` | `-> T ! BoundsError` 或 `-> T?`<br>*(无 `Unsafe` 副作用)* | 100% 边界安全，越界通过值返回错误链或 `null` 显式处理，适合外部不可信索引输入。 |
+| **2. 默认安全下标**<br>`seq[i]` / `seq[i] = val` | `-> T` / `-> void`<br>*(无 `Unsafe` 副作用)* | **语义上 100% 受边界保护**；但**若编译期边界证明器（`Jenny-BoundsProver`）证明当前支配路径满足 $0 \le i < \text{seq.len}$，编译器自动消去运行期比较分支（Zero-Cost Bounds Check Elision，直接生成单条寻址指令 `*(seq.ptr + i)`）**；仅当无法静态得证时保留单条无符号比较指令 `cmp i, len; jae trap`。 |
 | **3. 底层免检原语**<br>`seq.get_unchecked(i)`<br>`seq.set_unchecked(i, val)` | `-> T effects [Unsafe]`<br>`requires 0 <= i && i < self.len` | 底层零分支寻址原语，携带 `effects [Unsafe]` 与霍尔前置契约。调用方若在外层完成一次性批量边界检查并用 **`mask [Unsafe]`** 阻断 `Unsafe` 传染，**必须通过编译期 `QF_LIA` 完备性证明，否则触发 `E0711_UNPROVEN_BOUNDS_CONTAINMENT` 编译错误！** |
 
 #### 2. 为什么 Jenny 能在编译期 $< 1\text{ms}$ 内自动证明边界完备性？

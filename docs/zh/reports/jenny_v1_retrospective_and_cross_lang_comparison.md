@@ -26,7 +26,7 @@
 ### 1.2 对照《哲学与总纲》六大核心架构法则的复盘
 
 1. **法则一：契约与实现物理分离（`.jni` 文学化蓝图 vs `.jn` 幕后实现）**
-   * **达成状态**：**完全落地**。全集 25 个模块证实：在架构拓扑上下文受限时，Agent 只需加载 `.jni` 蓝图即可获得 100% 的公共类型、函数签名、前置/后置契约与效应边界，平均节省 **`65.43%`** 的上下文窗口（**`2.89x` 上下文容量扩容**），人类代码审查只需阅读 `.jni` 即可锁定行为正确性。
+   * **达成状态**：**完全落地**。全集 25 个模块证实：在架构拓扑上下文受限时，Agent 只需加载 `.jni` 蓝图即可获得 100% 的公共类型、函数签名、前置/后置契约与副作用边界，平均节省 **`65.43%`** 的上下文窗口（**`2.89x` 上下文容量扩容**），人类代码审查只需阅读 `.jni` 即可锁定行为正确性。
 2. **法则二：契约即一等公民（First-Class Contracts & Anti-Hallucination）**
    * **达成状态**：**完全落地**。`requires ... else Error` 自动织入函数入口免去手写防御样板；`ensures` + `old(expr)` 快照 + `struct invariant` 结合静态契约路径审计（`E0108_MISSING_ENSURES_FIELD_MUTATION`），在编译期与 `@example` 沙箱期 100% 拦截了 AI “硬编码返回值骗过测试”的投机行为。
 3. **法则三：三态参数传递与双轨内存（Three-Mode Parameters & Dual-Track Memory）**
@@ -50,14 +50,14 @@
 | 规范模块 | 核心语言特性 | 语法形式 | 编译器静态检查码 (`jenny_flow.py`) | C99 运行时支撑 (`jenny_rt.h`) | 状态 |
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | **01 内存与所有权** | 三态参数传递 | `x: T` (只读), `mut x: T` (排他可变), `own x: T` (移动消耗) | `E0106`, `E0201`, `E0202` | `JN_RESTRICT` (`__restrict`) + 作用域末确定性析构 | ✅ 完备 |
-| **01 内存与所有权** | 双轨堆与区域池 | `*T` (独占堆), `*in(arena) T` (区域池), `^T` (Immix GC 句柄) | `E0203` (视图逃逸), `E0204` (`AllocGC` 效应) | `jn_box_alloc/free`, `JnArena`, `jn_gc_alloc/collect` | ✅ 完备 |
+| **01 内存与所有权** | 双轨堆与区域池 | `*T` (独占堆), `*in(arena) T` (区域池), `^T` (Immix GC 句柄) | `E0203` (视图逃逸), `E0204` (`AllocGC` 副作用) | `jn_box_alloc/free`, `JnArena`, `jn_gc_alloc/collect` | ✅ 完备 |
 | **01 & 03 闭包** | 三轨闭包生命期 | `fn(A)->R` (栈视图), `*fn[own ..](A)->R` (独占堆), `^fn(A)->R` (GC) | `E0205` (栈闭包逃逸), `E0206` (漏写 `own` 捕获) | `JnFn_*`, `JnBoxFn_*` (`jn_box_fn_drop` 级联释放), `JnGcFn_*` | ✅ 完备 |
 | **02 类型与 ADT** | 结构体、带负载枚举与可空 | `struct`, `enum` (Tagged Union), `T?`, `[]T` 切片, `str` | `E0105` (禁止 `&`/`<'a>`) | C99 `struct` + `enum tag` + `union` + `JnSlice_*` + `JnStr` | ✅ 完备 |
 | **03 线性控制流** | 模式解构与函数式管道 | `if x is Pat`, `guard x is Pat else`, `x \|> f(_)`, `??`, 具名参数 | `E0104` (禁止 `? :` 三元), `E0103` (强制显式 `return`) | 结构化 C99 分支展开与短路求值 | ✅ 完备 |
 | **04 多态与委托** | 接口契约与零样板委托 | `pub trait`, `impl Trait for T`, `dyn Trait`, `delegate Trait to self.f` | `E0307` (非法委托目标) | 16 字节 `JnDyn_<Trait>` (`data` + 静态只读 `vtable`) | ✅ 完备 |
-| **05 错误与效应** | 三层错误截断与轨迹环 | `T ! E` $\rightarrow$ `T ! (E \| AnyError)` $\rightarrow$ `T!`, `?`, `catch`, `effects [...]` | `E0204`, `E0402` | 16 字节双寄存器 `JnAnyError` + 16 槽位 TLS RingBuffer | ✅ 完备 |
+| **05 错误与副作用** | 三层错误截断与轨迹环 | `T ! E` $\rightarrow$ `T ! (E \| AnyError)` $\rightarrow$ `T!`, `?`, `catch`, `effects [...]` | `E0204`, `E0402` | 16 字节双寄存器 `JnAnyError` + 16 槽位 TLS RingBuffer | ✅ 完备 |
 | **06 白盒元编程** | 编译期纺纱与反向提炼 | `@spin fsm::*`, `@apply(codec/crud)`, `@spin if`, `jenny --distill` | `E0305` (二进制协议禁混入 `^T`), `E0306` (纯增量法则) | 编译期展开为 `.spun/<module>.spun.jn` 后降级 C99 | ✅ 完备 |
-| **07 结构化并发** | 轻量级协程并发收集 | `fiber::all(...)`, `fiber::race(...)`, `effects [Async, IO]` | 效应传播检查 | 确定性批处理运行时原语 | ✅ 完备 |
+| **07 结构化并发** | 轻量级协程并发收集 | `fiber::all(...)`, `fiber::race(...)`, `effects [Async, IO]` | 副作用传播检查 | 确定性批处理运行时原语 | ✅ 完备 |
 | **08 C FFI 互操作** | 零胶水 C 头文件直连 | `import c "h.h" as c`, `@repr(C)`, `.as_raw_ptr()`, `effects [Unsafe]` | `E0401` (禁隐式裸指针), `E0402` (缺 `Unsafe`), `E0403` (禁传 `^T`) | 直接 `#include` C 头文件 + 零拷贝指针桥接 | ✅ 完备 |
 | **09 文学化契约** | Markdown 蓝图与四维契约 | `.jni` + `requires ... else` + `ensures (old)` + `invariant` + `@example` | `E0101` (签名失配), `E0102` (蓝图实现禁入), `E0108` (漏改后置字段) | `JN_CONTRACT_FAIL` (`exit 42`) + `@example` `main()` 驱动 | ✅ 完备 |
 | **10 防膨胀构建** | ABI 防火墙与 CAS 缓存 | `jni_abi_hash` vs `jn_impl_hash` | 自动增量缓存校验 | `.jenny-cache/{c99,bin,manifest.json}` (`0.0ms` 热命中) | ✅ 完备 |

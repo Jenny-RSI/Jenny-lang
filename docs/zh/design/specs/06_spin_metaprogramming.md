@@ -198,7 +198,7 @@ impl<T> Array<T> {
 
 传统语言的面向切面编程（AOP）长期处于两极分化的困境：Java（Spring AOP / AspectJ）依赖运行期动态代理、`Object[]` 装箱反射与隐晦的正则表达式切点，不仅运行期开销高昂，且源码对切面完全不可见；Rust（`#[tracing::instrument]`）则必须手写复杂的编译器 `proc_macro` 操纵抽象语法树 Token 流，极易沦为难以单步调试的宏黑洞。
 
-Jenny 直接复用第 4 节确立的**过程式 `@spin` 模板展开（Procedural `@spin` Template Unrolling）**，提供一套**零闭包/零反射开销、100% `.spun` 白盒落盘、且与 `.jni` 契约及静态效应系统（`effects`）深度协同**的五级编译期 AOP 体系。
+Jenny 直接复用第 4 节确立的**过程式 `@spin` 模板展开（Procedural `@spin` Template Unrolling）**，提供一套**零闭包/零反射开销、100% `.spun` 白盒落盘、且与 `.jni` 契约及静态副作用系统（`effects`）深度协同**的五级编译期 AOP 体系。
 
 ### 5.1 过程式函数切面定义 (`@target fn_meta: SpinFn, ...args: Any`)
 
@@ -279,8 +279,8 @@ Jenny 将切面挂载粒度细化为从宏观构建到微观语句块的 **5 个
 | **L4** | **类型 / 函数级**<br>*(Type `impl` / `fn`)* | `impl Struct` 块或单个 `pub fn` / `fn`（支持 `@no_apply` 豁免） | 指定结构体的全部方法，或单个具体函数 | 状态机流转审计（`impl OrderFsm`）、单函数自动重试 `@apply(retry)` |
 | **L5** | **语句 / 块级**<br>*(Statement / Block)* | 函数体内部的 `{ ... }` 局部代码块或循环块 | 局部语句块（`@target blk: SpinBlock`，**原地内联展开**） | 函数内分阶段耗时打点、热点循环零分配守卫（`assert_zero_alloc`） |
 
-#### 典型范式 1：L1 全局构建级 + 静态效应过滤实现“全局内存分配调用审查”
-得益于 Jenny 每个函数都具备编译器强制验证的 `effects [AllocNative, AllocGC, AllocRegion]` 标签，以及依赖包携带 `lib/pkg.jnast` 规范化 AST 归档（见[模块十二](./12_package_management_and_module_system.md) §5.3），L1 全局切面无需靠脆弱的函数名正则匹配，即可按效应标签对全工程（含第三方库）的每一次堆内存分配进行 **100% 零漏报、零误报的静态织入审查**：
+#### 典型范式 1：L1 全局构建级 + 静态副作用过滤实现“全局内存分配调用审查”
+得益于 Jenny 每个函数都具备编译器强制验证的 `effects [AllocNative, AllocGC, AllocRegion]` 标签，以及依赖包携带 `lib/pkg.jnast` 规范化 AST 归档（见[模块十二](./12_package_management_and_module_system.md) §5.3），L1 全局切面无需靠脆弱的函数名正则匹配，即可按副作用标签对全工程（含第三方库）的每一次堆内存分配进行 **100% 零漏报、零误报的静态织入审查**：
 
 ```jenny
 @spin pub fn audit_memory_alloc(@target fn_meta: SpinFn, ...args: Any) -> fn_meta.Return {

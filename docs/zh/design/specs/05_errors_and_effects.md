@@ -194,7 +194,7 @@ pub fn handle_login_request(provider: dyn AuthProvider, req: HttpRequest) -> Htt
 1. **`.jni` 蓝图中的公开函数（`pub fn`）强制显式声明向外传播的 `effects [...]`**：保障人类阅读 `.jni` 与 AI 跨模块检索时 100% 局部自包含。
 2. **`.jn` 内部私有辅助函数与闭包自动推导**：免去内部实现层的手写负担，高阶函数（如 `map`）自动透传闭包实参的副作用集合。
 
-### 6.3 受控效应阻断与代码审计信号机制 (`mask [...]` — Controlled Effect Containment & Audit Signals)
+### 6.3 受控副作用阻断与代码审计信号机制 (`mask [...]` — Controlled Effect Containment & Audit Signals)
 
 #### 1. 为什么不能采用“死板硬传染（Rigid Virality）”？
 如果所有 `effects`（尤其是 `Sync`、`AllocNative`、`Unsafe`）都强制无条件向上传染，会引发严重的 **“抽象接口污染（Trait Coloring Problem）”**：
@@ -202,7 +202,7 @@ pub fn handle_login_request(provider: dyn AuthProvider, req: HttpRequest) -> Htt
 * 从调用方视角看，锁已在函数返回前 100% 释放，该操作是线程安全且自包含的；若强迫 `KvStore::get` 加上 `effects [Sync]`，就会将 `.jn` 的内部实现细节泄露到顶层抽象 `trait` 中。
 
 #### 2. `mask [<Effect>, ...]` 语法：显式阻断传染 + 注册代码审计锚点
-Jenny 允许在 `.jn` 实现文件的**函数头**或**局部代码块**上使用 **`mask [...]`** 关键字，在确保边界安全的前提下显式阻断指定效应向上传播：
+Jenny 允许在 `.jn` 实现文件的**函数头**或**局部代码块**上使用 **`mask [...]`** 关键字，在确保边界安全的前提下显式阻断指定副作用向上传播：
 
 ```jenny
 // 函数级阻断：内部使用 OsMutex (effects [Sync])，但在返回前 100% 释放锁，对外实现纯净无标签的 KvStore trait

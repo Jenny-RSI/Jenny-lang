@@ -4,7 +4,7 @@
 > **第一性原理（从“黑盒整包管理”到“白盒意图与契约管理”）**：  
 > 传统编程语言的包管理器（Cargo、Go Modules、npm、pip）之所以陷入 **“版本语义混乱、依赖只能整包拉取与整包更新、菱形依赖类型分裂、包体积严重膨胀、供应链暗箱提权”** 的死局，根本原因在于：**传统语言将代码视为不可透视的“黑盒（Black Box）”**——如果不逐行通读第三方库成千上万行实现源码，人类和编译器根本不知道这个包内部究竟做了什么。  
 > 而在 Jenny 中，**每一个包在架构与语义上都是天然的“白盒（White Box）”**：仅通过审查 `<mod>.jni` 文学化契约蓝图，人类、AI 与编译器就能 100% 掌握该模块的意图、内存轨道（`T` / `*T` / `^T`）、副作用边界（`effects [...]`）以及精确的前后置条件（`requires` / `ensures` / `invariant`）。  
-> **工程演进纪律**：颠覆性的白盒包管理绝不能靠纸面脑补一步到位，必须与 `v0.2 (Jenny-Std)` 标准库建设深度绑定，按 **`Phase 1 (按需子图解析)` $\rightarrow$ `Phase 2 (白盒效应审计)` $\rightarrow$ `Phase 3 (契约差分与模块热替换)` $\rightarrow$ `Phase 4 (契约-实现解耦与蓝图织造)`** 四步在实战中逐一检验与演化。
+> **工程演进纪律**：颠覆性的白盒包管理绝不能靠纸面脑补一步到位，必须与 `v0.2 (Jenny-Std)` 标准库建设深度绑定，按 **`Phase 1 (按需子图解析)` $\rightarrow$ `Phase 2 (白盒副作用审计)` $\rightarrow$ `Phase 3 (契约差分与模块热替换)` $\rightarrow$ `Phase 4 (契约-实现解耦与蓝图织造)`** 四步在实战中逐一检验与演化。
 
 ---
 
@@ -13,7 +13,7 @@
 | 传统包管理的五大核心痛点 | 传统语言（Rust Cargo / Go / npm / pip）的物理症结 | **Jenny 基于 `.jni` 白盒契约的根治路径** | 对应实战演进阶段 |
 | :--- | :--- | :--- | :---: |
 | **1. 粗粒度“整包连坐”与体积膨胀**<br>*(Monolithic Package Bloat)* | 最小依赖单元是整个包（Crate/Repo）。哪怕只调用某库中 1 个函数，也必须下载、解析并编译该库全部 50 个模块及其传递依赖。 | **模块/符号级按需可达子图裁剪（Lazy Subgraph Resolution）**：因禁止 `import *` 且每个 `<mod>.jni` 独立自包含，编译器仅解析并编译从入口可达的 `.jni/.jn` 最小子图，未引用模块零编译、零体积开销。 | **Phase 1**<br>*(`v0.2-alpha1`)* |
-| **2. 黑盒依赖暗箱提权与脚本后门**<br>*(Black-Box Supply-Chain Escalation)* | 无法静态获知黑盒库内部是否偷偷发起网络请求、读写文件、分配 GC 或执行 `build.rs` / `postinstall` 宿主机恶意脚本。 | **永久废除 `build.rs` 脚本 + `.jni` 白盒效应指纹与 `allow_effects` 沙箱**：包的全部副作用 100% 暴露在 `.jni` 签名上并由编译器对 `.jn` 强制验真；消费方在 `Tapestry.toml` 按模块粒度锁死权限上限（`E0503`）。 | **Phase 2**<br>*(`v0.2-alpha2`)* |
+| **2. 黑盒依赖暗箱提权与脚本后门**<br>*(Black-Box Supply-Chain Escalation)* | 无法静态获知黑盒库内部是否偷偷发起网络请求、读写文件、分配 GC 或执行 `build.rs` / `postinstall` 宿主机恶意脚本。 | **永久废除 `build.rs` 脚本 + `.jni` 白盒副作用指纹与 `allow_effects` 沙箱**：包的全部副作用 100% 暴露在 `.jni` 签名上并由编译器对 `.jn` 强制验真；消费方在 `Tapestry.toml` 按模块粒度锁死权限上限（`E0503`）。 | **Phase 2**<br>*(`v0.2-alpha2`)* |
 | **3. 版本号语义混乱与盲盒式整包升级**<br>*(Arbitrary SemVer & Blind Upgrades)* | SemVer 全凭作者主观填写：作者修改了边界行为却发了 Patch 版本，下游整包升级后编译通过但线上静默算错；或改一行私有代码引发全链路重编。 | **基于 `.jni` AST 与有状态 Fuzz 的机械化版本验真 + 单模块实现热替换**：只要 `jni_abi_hash` 不变即可单独热替换某个 `<mod>.jn` 实现且下游 **0 重编**；升级时自动执行新旧 `.jn` 差分模糊测试（`--diff`）。 | **Phase 3**<br>*(`v0.2-beta`)* |
 | **4. 菱形依赖“类型分裂”与微包泛滥**<br>*(Diamond Type Split & Micro-Packages)* | 接口类型与实现代码死绑在同一包版本中，导致 `http 0.2` 与 `http 1.0` 的结构体无法互通；或为了几十行工具代码引入外部微包依赖。 | **`.jni` 契约包与 `.jn` 实现提供方解耦 + 纯 `.jni` 蓝图本地织造**：共享恒定的 `.jni` 契约哈希即可跨实现版本无缝传递类型；小型组件可仅引入 `.jni` 契约蓝图，由本地 AI 按需生成零外部依赖的 `.jn` 实现。 | **Phase 4**<br>*(`v0.2` 收官 / `v0.3`)* |
 
@@ -91,14 +91,14 @@ jenny_workspace/
      ```
 3. **告别 JS Barrel File 体积膨胀的“零成本按需符号穿透”（Zero-Cost Barrel Forwarding）**：
    * 在传统 JavaScript/TypeScript 中，通过 `index.ts` 重导出常导致打包器被迫解析整个目录下的所有文件；
-   * 而在 Jenny 中，由于严禁模块顶层存在副作用代码且 `pub import` 强制显式列出符号清单，当编译器看到 `import std::collections::{Vec}` 时，它在 `std/collections/mod.jni` 的符号映射表中查出 `Vec` 源自 `std::collections::vec`，**直接按需穿透并仅加载 `vec.jni` 的 `jenny_decl` 与 `vec.jn`**！同目录下的 `hash_map.jni` 与 `lru_cache.jni` **连打开都不会打开**（0 词法分析、0 编译耗时、0 效应传染、0 二进制体积）。
+   * 而在 Jenny 中，由于严禁模块顶层存在副作用代码且 `pub import` 强制显式列出符号清单，当编译器看到 `import std::collections::{Vec}` 时，它在 `std/collections/mod.jni` 的符号映射表中查出 `Vec` 源自 `std::collections::vec`，**直接按需穿透并仅加载 `vec.jni` 的 `jenny_decl` 与 `vec.jn`**！同目录下的 `hash_map.jni` 与 `lru_cache.jni` **连打开都不会打开**（0 词法分析、0 编译耗时、0 副作用传染、0 二进制体积）。
 4. **跨模块编译的物理白盒隔离（`.jni` `jenny_decl` Header Generation）**：
    * 编译器仅提取每个可达 `<mod>.jni` 中的 ```` ```jenny_decl ```` 块，降级为独立的 C99 接口头文件 `.jenny-cache/c99/<pkg>__<mod>.h`（内含结构体布局、函数原型与 `jni_abi_hash` 常量断言）；
    * 编译下游 `<consumer>.jn` 时，C99 后端仅 `#include "<pkg>__<mod>.h"`，从而在物理层面保证：**只要上游 `<mod>.jni` 的 `jenny_decl` 契约哈希未变，无论上游修改 `<mod>.jn` 内部实现、新增私有 `fn`，还是在 `<mod>.jni` 的 `jenny_test` 中增删测试用例，下游 `.o` 目标文件 100% 零重编！**
 
 ---
 
-## 3. 第二阶段 (`Phase 2` — `v0.2-alpha2` 实战)：白盒意图审计与包/模块级效应防火墙
+## 3. 第二阶段 (`Phase 2` — `v0.2-alpha2` 实战)：白盒意图审计与包/模块级副作用防火墙
 
 传统包管理必须把整个外部包当成不可信黑盒，而 Jenny 的 `.jni` 蓝图天然是一份 **经编译器强制验真的白盒能力清单（Verified Capability Manifest）**。
 
@@ -108,7 +108,7 @@ jenny_workspace/
 * **副作用画像**：该模块包含哪些 `effects`（`Pure []` / `AllocGC` / `IO` / `Unsafe`）？是否包含 `import c` 外部 C 调用？
 * **契约完备度画像**：公开函数的 `requires` / `ensures` / `invariant` 覆盖率与 `@example` 沙箱数量。
 
-### 3.2 `Tapestry.toml` 细粒度效应沙箱与永久废除构建脚本
+### 3.2 `Tapestry.toml` 细粒度副作用沙箱与永久废除构建脚本
 1. **永久禁绝 `build.rs` / `postinstall` 图灵完备构建脚本**：
    * Jenny 语言规范严格规定：**包管理器在拉取、检查或编译任何包时，永远不允许执行任何图灵完备的宿主机脚本**。所有代码生成 100% 必须在零 I/O、零网络的 `@spin` 内存沙箱中完成并白盒落盘至 `.spun/`；所有原生 C 库依赖必须在 `Tapestry.toml` 的 `[c_dependencies]` 中声明式列出。
 2. **消费方 `allow_effects` 权限阀门（拦截供应链静默提权 `E0503`）**：
@@ -180,7 +180,7 @@ jenny_workspace/
 | :--- | :---: | :--- | :--- |
 | **`E0501_UNPAIRED_MODULE`** | Phase 1 | 包内导出的模块缺失配对的 `.jni` 蓝图或 `.jn` 实现文件 | 补齐配对的 `<mod>.jni` 文学化蓝图与 `<mod>.jn` 实现 |
 | **`E0502_CIRCULAR_DEPENDENCY`** | Phase 1 | 模块 `import` 依赖图存在环路（`mod_a -> mod_b -> mod_a`） | 将共享的数据结构或 `trait` 抽离至独立的底层 `.jni` 模块以打破环路 |
-| **`E0503_CAPABILITY_VIOLATION`** | Phase 2 | 模块请求了超出 `Tapestry.toml` 中 `allow_effects` 沙箱授权范围的受限效应（如 `Net`、`IO`、`Unsafe`） | 移除越权调用，或在 `Tapestry.toml` 经人工审计后显式放开对应效应权限 |
+| **`E0503_CAPABILITY_VIOLATION`** | Phase 2 | 模块请求了超出 `Tapestry.toml` 中 `allow_effects` 沙箱授权范围的受限副作用（如 `Net`、`IO`、`Unsafe`） | 移除越权调用，或在 `Tapestry.toml` 经人工审计后显式放开对应副作用权限 |
 | **`E0504_UNEXPORTED_MODULE`** | Phase 1 | 导入了未在包根门面 `pkg.jni` 中 `pub mod` 公开导出的内部模块 | 仅导入 `pkg.jni` 公开导出的模块，或在 `pkg.jni` 中显式导出 |
 | **`E0505_UNDECLARED_FFI_IMPORT`** | Phase 2 | 在普通模块中使用黑盒 `import c "<header>.h"` 导入外部 C 头文件 | 使用 `spindle bindgen-c` 生成白盒 `.jni` 蓝图（`@repr(C)` `struct`/`union`/`@bits(N)` + `@extern_c`）后导入该白盒模块 |
 | **`E0506_SEMVER_EFFECT_EXPANSION`** | Phase 3 | 候选版本升级对已有公开函数新增了副作用标签（$E_{\text{new}} \not\subseteq E_{\text{old}}$） | 移除新增副作用，或显式作为主版本破坏性变更发布 |

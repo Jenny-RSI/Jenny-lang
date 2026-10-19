@@ -10,7 +10,7 @@
 ### 1.1 `effects [Async]` 与 `.await` 后缀语法
 1. **声明异步函数**：无需额外的 `async fn` 关键字前缀，统一在函数签名末尾通过 **`effects [Async]`** 声明该函数是一个可挂起的异步状态机函数。
 2. **显式挂起点（Explicit Suspension Points）**：
-   * 遵循“无隐式控制流跳转”原则，调用任何带有 `Async` 效应的函数时，**必须显式书写后缀 `.await`**，使每个让出执行权的挂起点在代码审查时 100% 肉眼可见。
+   * 遵循“无隐式控制流跳转”原则，调用任何带有 `Async` 副作用的函数时，**必须显式书写后缀 `.await`**，使每个让出执行权的挂起点在代码审查时 100% 肉眼可见。
    * **为什么采用后缀 `.await` 而非前缀 `await expr`？** 因为后缀 `.await` 可与错误传播后缀 `?` 及方法调用链无缝从左到右串联（如 **`http::get(url).await?.json().await?`**），彻底告别 `(await (await http::get(url))?.json())?` 的括号地狱！
 
 ### 1.2 编译器 Continuation 状态机转换与“免 `Pin` 位置无关”定理
@@ -139,9 +139,9 @@
      $$\text{Self} \xrightarrow{\text{waiting\_for}} \text{Lock}_1 \xrightarrow{\text{owner}} \text{Actor}_B \xrightarrow{\text{waiting\_for}} \text{Lock}_2 \xrightarrow{\text{owner}} \dots$$
    * **一旦指针链回到 `Self`**：立即确认发生 100% 闭合死锁环！当前加锁调用**立即中止等待并返回 `Err(SyncError.DeadlockCycleDetected)`**，同时将环路上各节点的符号与行号写入 `ErrorTrace`！
 
-### 6.4 防线四：`mask [Sync]` 受控效应阻断（零抽象接口污染）与 `spindle audit` 审计信号
+### 6.4 防线四：`mask [Sync]` 受控副作用阻断（零抽象接口污染）与 `spindle audit` 审计信号
 1. **不污染抽象 `trait` 接口**：
-   * 底层锁与信号量操作带有 `effects [Sync]`；但当某个具体实现（如 `ConcurrentLruStore::get(self)`）在函数内部加锁并在返回前 100% 释放锁时，可在 `.jn` 实现中标注 **`mask [Sync]`** 阻断效应向上传播，从而无需在顶层抽象接口 `pub trait KvStore` 上被迫添加 `effects [Sync]`。
+   * 底层锁与信号量操作带有 `effects [Sync]`；但当某个具体实现（如 `ConcurrentLruStore::get(self)`）在函数内部加锁并在返回前 100% 释放锁时，可在 `.jn` 实现中标注 **`mask [Sync]`** 阻断副作用向上传播，从而无需在顶层抽象接口 `pub trait KvStore` 上被迫添加 `effects [Sync]`。
 2. **阻断点静态检查与后期安全审计信号**：
    * 编译器对所有 `mask [Sync]` 强制校验 **`E0709_MASKED_LOCK_ESCAPE`**（严禁任何未释放的锁守卫或信号量许可逃逸出 `mask [Sync]` 作用域）；
    * 同时，`spindle audit` 将全仓所有的 `mask [Sync]`、`mask [Unsafe]`、`mask [AllocNative]` 汇总为结构化代码审计信号（区分 `SAFE_LEAF_CRITICAL_SECTION` 与持锁调外部接口的 `W0710_EXTERNAL_CALL_UNDER_MASKED_SYNC`），供人类架构师或设计模型后期精准审计。

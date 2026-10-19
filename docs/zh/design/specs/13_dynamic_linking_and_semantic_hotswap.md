@@ -5,7 +5,7 @@
 > * [模块一：AI 原生双轨内存与参数意图模型](./01_memory_and_ownership.md)（视图不逃逸铁律 `E0201`）
 > * [模块六：`@spin` 编译期白盒元编程](./06_spin_metaprogramming.md)（过程式模板单态化与 `.jenny-cache/spin/` 全局去重）
 > * [模块九：文学化架构蓝图（`.jni`）与一等公民契约系统](./09_literate_blueprint_and_contracts.md)
-> * [模块十二：包管理、模块解析与供应链效应防火墙 (`Spindle`)](./12_package_management_and_module_system.md)
+> * [模块十二：包管理、模块解析与供应链副作用防火墙 (`Spindle`)](./12_package_management_and_module_system.md)
 
 ---
 
@@ -108,7 +108,7 @@ flowchart TD
 ### 3.2 第二级：按需符号子图 + 霍尔契约子类型运行期验证（Subgraph Subtyping Check）
 * 当动态库升级了版本（如 `.jni` 增加了新函数、或调整了契约）导致整表哈希变化时，加载器**不再一刀切报错**，而是仅针对**当前宿主程序实际导入并调用的符号子集（Used-Symbol Subgraph）**执行四项运行期数学验证：
   1. **物理内存布局全等（`layout_hash` Match）**：宿主用到的每个 `struct` / `enum` / `union` 的字节大小、字段偏移量与位域宽度必须 100% 恒等（哪怕动态库修改了宿主未使用的其他结构体，也完全放行）；
-  2. **效应权限不扩张（$E_{\text{dylib}} \subseteq E_{\text{caller}}$）**：新版动态库函数声明的 `effects` 必须是调用方编译期预期效应的子集（防止新版动态库偷偷夹带 `Net` / `IO` 后门）；
+  2. **副作用权限不扩张（$E_{\text{dylib}} \subseteq E_{\text{caller}}$）**：新版动态库函数声明的 `effects` 必须是调用方编译期预期副作用的子集（防止新版动态库偷偷夹带 `Net` / `IO` 后门）；
   3. **前置条件不收紧（$\text{Req}_{\text{caller}} \implies \text{Req}_{\text{dylib}}$）**：调用方保证满足的前置条件必须能推导出动态库要求的前置条件；
   4. **后置保证不削弱（$\text{Ens}_{\text{dylib}} \implies \text{Ens}_{\text{caller}}$）**：动态库承诺的后置条件必须能推导出调用方依赖的所有后置条件。
 
