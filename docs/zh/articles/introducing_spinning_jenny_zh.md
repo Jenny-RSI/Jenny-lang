@@ -1,4 +1,4 @@
-\n> 🌐 **语言 / Language**: **[English](../../../articles/introducing_spinning_jenny.md)** | **简体中文**
+# 告别 Vibe Coding 的“黑暗森林”：迎接从AI原生第一性原理出发的 Spinning Jenny 系统级编程语言
 
 ![Spinning Jenny — Weaving Human Intent & AI Intelligence into Verified Code](./assets/spinning_jenny_cover.jpg)
 

@@ -17,23 +17,10 @@
 * **下一目标版本**：**`v0.2` (`Jenny-Std`：以构建 `std` 标准库为真实战场并全面对标 Rust `std`)** —— 详见 [`docs/roadmap/roadmap_v0.2.md`](./docs/roadmap/roadmap_v0.2.md)。
 
 ---
+## 详细介绍
 
-## 🔥 六大核心技术突破 (Core Innovations)
-
-1. **📄 文学化契约蓝图（`.jni`）与幕后实现（`.jn`）物理分离**
-   * `<module>.jni` 顶层直接是原生标准 Markdown 文档，形式化类型、函数签名与契约内嵌于 ```` ```jenny ```` 代码块中；
-   * 跨模块导入仅需加载 `.jni` 接口声明（**节省 65.31% 自身上下文与 69.41% 相比 Rust 生产代码的上下文 Token**），且修改 `.jn` 实现不改变 `jni_abi_hash`，下游模块 **100% 零重编**。
-2. **🛡️ 一等公民形式化契约与四层内生自动化验证**
-   * 内置 `requires ... else Error`、`ensures (result / old)`、`struct invariant` 与 `@example`，自动织入 C99 运行时断言（违约退出码 `42`）与编译期静态赋值检查（`E0108`）；
-   * 配备 `@example` 即时原生沙箱（49/49 全过）、`--fuzz` 标量契约模糊测试与 20 轮零泄漏压力重放（2,480 次调用）及 `--mutate` 26 项故障注入回归套件（13 运行时 + 13 静态，100% 拦截）。
-3. **🧬 无符号三态参数与双轨三态内存 / 闭包生命期**
-   * **废除 `&T`、`&mut T` 与 `<'a>`**：默认只读借用（`x: T` / `self`，调用后永不意外 Move）、排他可变借用（`mut x: T`，映射为 C99 `JN_RESTRICT`）、显式所有权移交（`own x: T`）；
-   * **三轨存储与闭包正交对齐**：栈值与自动推导视图（`T` / `fn`，`E0203`/`E0205` 拦截逃逸）、原生独占堆与区域池（`*T` / `*in(arena) T` / `*fn[own ...]` 级联析构）、以及由 `effects [AllocGC]`（`E0204`）门控的托管共享句柄（`^T` / `^fn`）。
-4. **⚡ 三层错误截断、`@spin` 白盒元编程与零胶水 C FFI**
-   * 16 字节双寄存器内联 `JnAnyError`（`T!`）+ 16 槽位线程局部错误轨迹环；
-   * `delegate` 零样板委托与 `@spin` / `@apply` 白盒展开（落盘 `.spun/*.spun.jn`，在 `B19`~`B21` 实现 **`11.37x` 手写实现压缩**）；
-   * `import c "header.h"` 零胶水 C FFI，强制 `.as_raw_ptr()`（`E0401`）、`effects [Unsafe]`（`E0402`）并禁止向 C 传递 `^T`（`E0403`）。
-
+[长文详细介绍：从AI原生第一性原理出发的Spinning Jenny系统级编程语言](./docs/zh/articles/introducing_spinning_jenny_zh.md)
+[PPT介绍: AI时代的编程范式革命](./docs/zh/articles/spinning_jenny_pitch_deck_zh.pptx)
 ---
 
 ## 🚀 快速复现与验证命令（Node.js v24 原生 TypeScript 编译器）
