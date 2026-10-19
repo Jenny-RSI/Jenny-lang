@@ -19,8 +19,8 @@
 ---
 ## 详细介绍
 
-[长文详细介绍：从AI原生第一性原理出发的Spinning Jenny系统级编程语言](./docs/zh/articles/introducing_spinning_jenny_zh.md)
-[PPT介绍: AI时代的编程范式革命](./docs/zh/articles/spinning_jenny_pitch_deck_zh.pptx)
+* [长文详细介绍：从AI原生第一性原理出发的Spinning Jenny系统级编程语言](./docs/zh/articles/introducing_spinning_jenny_zh.md)
+* [PPT介绍: AI时代的编程范式革命](./docs/zh/articles/spinning_jenny_pitch_deck_zh.pptx)
 ---
 
 ## 🚀 快速复现与验证命令（Node.js v24 原生 TypeScript 编译器）
