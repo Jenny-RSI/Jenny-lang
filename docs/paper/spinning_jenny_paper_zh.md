@@ -97,7 +97,7 @@ flowchart LR
     JNI & JN -->|"jenny_flow.py --build-native\n契约织入 + C99 降级"| Bin["🚀 Native Binary (.exe)\n+ 49/49 @example 自检"]
 ```
 
-* **`.jni`（Jenny Interface / Literate Blueprint）**：文件顶层直接是原生标准 Markdown（不使用 `///` 文档注释符号）。编译器提取 ```` ```jenny ```` 围栏代码块中的公共类型（`pub struct`/`enum`/`trait`）、函数签名（`pub fn`）、效应声明（`effects`）与形式化契约。
+* **`.jni`（Jenny Interface / Literate Blueprint）**：文件顶层直接是原生标准 Markdown（不使用 `///` 文档注释符号）。编译器提取 ```` ```jenny ```` 围栏代码块中的公共类型（`pub struct`/`enum`/`trait`）、函数签名（`pub fn`）、副作用声明（`effects`）与形式化契约。
 * **`.jn`（Jenny Implementation）**：仅包含函数体实现与私有辅助函数。需要指出的是，Jenny 并非消除了测试代码，而是将传统语言中散落在 `_test.rs` / `_test.go` 中的测试与边界规约，结构化地收敛到了 `.jni` 的 `requires`/`ensures`/`invariant` 与 `@example` 块中。
 
 ### 3.2 四维一等公民契约与 C99 降级机理
@@ -180,10 +180,10 @@ Jenny 废除了显式生命周期标注（`<'a>`），将对象存储划分为�
 2. **轨道二：独占原生堆指针（`*T`）与区域分配（`*in(arena) T`）**
    * `*T` 为唯一所有者堆盒，底层调用 `jn_box_alloc(sizeof(T))`（封装 `calloc` 并递增全局活跃盒计数器 `_jn_active_native_boxes`）。在作用域退出、提前 `return` 或 `?` 错误返回时，编译器织入 `jn_box_free(ptr)`（递减计数器并 `free`）。
    * `*in(arena) T` 在 `JnArena`（`jn_arena_init` / `jn_arena_alloc` 游标碰撞分配）上分配节点，并在作用域结束时由 `jn_arena_drop` 一次性释放整块区域内存（如 `B15_arena_ast_builder`、`B23_arena_json_tokenizer`）。
-3. **轨道三：托管共享句柄（`^T`）与效应门禁（`effects [AllocGC]`）**
+3. **轨道三：托管共享句柄（`^T`）与副作用门禁（`effects [AllocGC]`）**
    * 针对双向链表（`B16_lru_doubly_linked`）等含循环引用的共享拓扑，提供 `^T` 托管句柄。
    * **当前原型运行时实现说明**：在当前的 [`jenny_rt.h`](../../compiler/jenny-flow/jenny_rt.h) 原型中，`jn_gc_alloc(size)` 采用固定容量（1024 槽位）的全局指针注册表配合 `calloc` 实现，`jn_gc_collect_all()` 在任务或请求周期结束时遍历该表一次性 `free` 全部已注册指针并清空槽位（完整的多块式 Immix 标记-区域疏散回收器目前仅在设计规范中定义，属于第 9.4 节的后续工程演进）。
-   * **静态效应隔离（`E0204`）**：任何分配 `^T` 或调用含 GC 效应函数的代码，必须在 `.jni` 签名中显式标注 `effects [AllocGC]`，否则触发 `E0204_UNDECLARED_EFFECT`。
+   * **静态副作用隔离（`E0204`）**：任何分配 `^T` 或调用含 GC 副作用函数的代码，必须在 `.jni` 签名中显式标注 `effects [AllocGC]`，否则触发 `E0204_UNDECLARED_EFFECT`。
 
 ### 4.3 三轨闭包生命期与 C99 Lambda Lifting（`B25`）
 在 [`B25_closure_lifetimes`](../../benchmarks/stage4_native/B25_closure_lifetimes/closure_lifetimes.jn) 中，Jenny 将闭包类型与上述三条存储轨道一一对应，并通过 C99 Lambda Lifting 降级：
@@ -291,7 +291,7 @@ Jenny 废除了显式生命周期标注（`<'a>`），将对象存储划分为�
 3. **13 项编译期静态检查回归测试（`jenny_flow.py --mutate`，Stage 2~4）**：
    针对 `jenny_flow.py --mutate` 中构造的 **13 个静态违规变异体**（表 7.3；注：语法层面的 `E0101_FORBIDDEN_REF_SYNTAX`、`E0102_FORBIDDEN_LET_BINDING` 与 `E0108_MISSING_ENSURES_FIELD_MUTATION` 另由 `llm_eval_harness.py --provider mock` 及在线评测覆盖），编译器静态检查器均返回了对应的预期错误码：
 
-| 回归用例编号 | 目标模块 | 注入的非法借用 / 视图 / 效应 / 元编程 / 闭包 / FFI 构造 | 实测捕获的静态错误码 | 结果 |
+| 回归用例编号 | 目标模块 | 注入的非法借用 / 视图 / 副作用 / 元编程 / 闭包 / FFI 构造 | 实测捕获的静态错误码 | 结果 |
 | :--- | :--- | :--- | :--- | :---: |
 | `MUT-S2-E0106` | `B13_pcm_frame_pipeline` | 在默认只读方法 `peak_energy(self)` 内修改字段 `self.s0 = 0` | `E0106_READONLY_PARAM_MUTATION` | ✅ 捕获 |
 | `MUT-S2-E0201` | `B13_pcm_frame_pipeline` | 在 `consume_and_archive(own frame)` 消耗所有权后再次访问 `frame` | `E0201_USE_AFTER_OWN` | ✅ 捕获 |
@@ -364,7 +364,7 @@ Jenny 废除了显式生命周期标注（`<'a>`），将对象存储划分为�
 2. **契约式设计（DbC）与形式化验证语言**：
    Meyer 在 Eiffel 中提出了契约式设计（`require` / `ensure` / `invariant`）[6]。此后，SPARK Ada [10]、Frama-C（ACSL）[11]、Dafny [12] 与 Rust Verus [13] 将前置/后置条件推进至基于 SMT 求解器（如 Z3）的静态定理证明。然而，SMT 求解器在复杂循环不变量上的超时与引理编写负担对轻量级小模型并不友好。Jenny 选择了实用主义的工程折中：将 `requires`/`ensures(old)`/`invariant` 与内嵌 `@example` 直接织入 C99 机器码在编译期沙箱中运行，并辅以轻量级 AST 赋值检查（`E0108`）。
 3. **可变值语义、区域内存与现代系统语言（Hylo / Vale / Austral / Koka / Zig / MoonBit）**：
-   为了规避 Rust 显式引用生命周期（`<'a>`）的复杂性，Racordon 等人提出的 **Hylo（原 Val）**[5] 采用可变值语义（Mutable Value Semantics）与下标投影，用 `let`/`inout`/`sink` 替代引用符号；Jenny 的三态参数（默认只读 / `mut` / `own`）直接受益于这一思路，但额外引入了双轨堆（`*T` 独占堆与 `^T` 托管句柄）及三轨闭包以支持图结构与高阶函数。在内存与效应系统方面，Jenny 的 `*in(arena) T` 呼应了 Tofte & Talpin 的区域内存管理（Region-Based Memory Management）[14] 与 Zig 的显式分配器哲学；`effects [AllocGC, Unsafe]` 借鉴了 **Koka** [15] 的代数效应标注思想；而面向 AI 友好的模块化设计亦与近年兴起的 **MoonBit**、**Austral**（线性类型）及 **Vale**（区域世代引用）形成互补探索。
+   为了规避 Rust 显式引用生命周期（`<'a>`）的复杂性，Racordon 等人提出的 **Hylo（原 Val）**[5] 采用可变值语义（Mutable Value Semantics）与下标投影，用 `let`/`inout`/`sink` 替代引用符号；Jenny 的三态参数（默认只读 / `mut` / `own`）直接受益于这一思路，但额外引入了双轨堆（`*T` 独占堆与 `^T` 托管句柄）及三轨闭包以支持图结构与高阶函数。在内存与副作用系统方面，Jenny 的 `*in(arena) T` 呼应了 Tofte & Talpin 的区域内存管理（Region-Based Memory Management）[14] 与 Zig 的显式分配器哲学；`effects [AllocGC, Unsafe]` 借鉴了 **Koka** [15] 的代数副作用标注思想；而面向 AI 友好的模块化设计亦与近年兴起的 **MoonBit**、**Austral**（线性类型）及 **Vale**（区域世代引用）形成互补探索。
 4. **LLM 与编译器反馈自愈闭环（Compiler-Feedback Self-Repair）**：
    利用编译器诊断或测试反馈引导 LLM 多轮修复代码已成为代码智能领域的热点方向，代表性工作包括 Chen 等人的 **Self-Debug** [16]、Deligiannis 等人针对 Rust 编译错误的 LLM 修复研究 [2] 以及 Jimenez 等人的 **SWE-bench** [17]。上述工作均将现有编程语言视为固定不变的外部环境，通过提示词工程改进模型修复率；本文则从**编程语言与编译器协同设计（PL-LLM Co-Design）**的视角出发，通过简化借用语法、内嵌契约沙箱与定制单步 `--ai-json` 诊断协议，从源头降低小模型的自愈难度。
 
