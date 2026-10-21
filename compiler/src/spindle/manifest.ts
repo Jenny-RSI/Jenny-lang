@@ -11,8 +11,30 @@ import {
 export const STD_DIR: string = path.join(ROOT_DIR, "library", "std");
 
 export const STD_MOD_ORDER: string[] = [
+  "std::prim::limits",
+  "std::prim::cast",
+  "std::prim::endian",
+  "std::prim::scalar",
+  "std::core::option",
+  "std::core::result",
+  "std::core::error",
+  "std::core::tuple",
+  "std::core::range",
+  "std::core::cmp",
+  "std::core::any",
+  "std::spin::reflect",
+  "std::spin::tokens",
+  "std::spin::emit",
   "std::rt::intrinsics",
   "std::ffi::c_abi",
+  "std::math::int",
+  "std::math::float",
+  "std::slice::ops",
+  "std::slice::sort",
+  "std::slice::search",
+  "std::hash::hasher",
+  "std::hash::fnv",
+  "std::hash::siphash",
   "std::mem::raw_buf",
   "std::mem::arena",
   "std::collections::vec",
@@ -22,10 +44,37 @@ export const STD_MOD_ORDER: string[] = [
   "std::str::str_view",
   "std::str::string_buf",
   "std::str::fmt",
+  "std::str::chars",
+  "std::str::search",
+  "std::str::parse",
+  "std::str::cstr",
   "std::io::cursor",
   "std::io::buf_io",
   "std::io::path_buf",
   "std::codec::varint",
+  "std::rand::seeded",
+  "std::rand::entropy",
+  "std::time::duration",
+  "std::time::instant",
+  "std::time::clock",
+  "std::env::args",
+  "std::env::vars",
+  "std::process::command",
+  "std::process::exit",
+  "std::fs::file",
+  "std::fs::dir",
+  "std::fs::meta",
+  "std::net::addr",
+  "std::net::tcp",
+  "std::net::udp",
+  "std::thread::atomic",
+  "std::thread::os_thread",
+  "std::thread::sync",
+  "std::thread::os_sync",
+  "std::fiber::task",
+  "std::fiber::channel",
+  "std::fiber::sync",
+  "std::fiber::parallel",
 ];
 
 const TOKEN_PATTERN =
@@ -291,13 +340,20 @@ export function validatePackageGraph(
       });
     }
 
+    const modAllowEffects = new Set<string>(allowEffects);
+    if (paths.allow_effects) {
+      for (const eff of paths.allow_effects.split("|")) {
+        if (eff.trim()) modAllowEffects.add(eff.trim());
+      }
+    }
+
     for (const [fkey, fspec] of Object.entries(ast.functions)) {
       for (const eff of fspec.effects) {
         if (
           RESTRICTED_CAPABILITY_EFFECTS.has(eff) &&
-          !allowEffects.has(eff)
+          !modAllowEffects.has(eff)
         ) {
-          const sortedAllow = JSON.stringify(Array.from(allowEffects).sort());
+          const sortedAllow = JSON.stringify(Array.from(modAllowEffects).sort());
           diags.push({
             code: "E0503_CAPABILITY_VIOLATION",
             severity: "error",

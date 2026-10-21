@@ -68,6 +68,7 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
   let i = 0;
   const n = lines.length;
   let currentImpl: string | null = null;
+  const privateFnKeys: string[] = [];
 
   while (i < n) {
     const line = lines[i].trim();
@@ -76,10 +77,18 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
       continue;
     }
 
-    const mImpl = /^impl\s+(?:[A-Za-z0-9_]+\s+for\s+)?([A-Za-z0-9_]+)\s*\{/.exec(line);
+    const mImpl = /^(?:pub\s+)?impl\s+(?:([A-Za-z0-9_]+)\s+for\s+)?([A-Za-z0-9_]+)\s*\{(\s*\})?$/.exec(line);
     if (mImpl) {
-      const implTarget = mImpl[1];
-      currentImpl = implTarget in ast.structs ? implTarget : null;
+      const traitName = mImpl[1] || null;
+      const implTarget = mImpl[2];
+      if (traitName && !ast.trait_impls.some((ti) => ti.trait_name === traitName && ti.struct_name === implTarget)) {
+        ast.trait_impls.push({ trait_name: traitName, struct_name: implTarget });
+      }
+      if (mImpl[3]) {
+        currentImpl = null;
+      } else {
+        currentImpl = implTarget in ast.structs || implTarget in ast.enums ? implTarget : null;
+      }
       i += 1;
       continue;
     }
@@ -93,10 +102,13 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
     if (
       line.startsWith("pub fn ") ||
       line.startsWith("fn ") ||
+      line.startsWith("pub iter fn ") ||
+      line.startsWith("iter pub fn ") ||
+      line.startsWith("iter fn ") ||
       line.startsWith("@spin pub fn ") ||
       line.startsWith("@spin fn ")
     ) {
-      const isPub = line.includes("pub fn ");
+      const isPub = line.includes("pub ") || line.startsWith("iter fn ");
       const isSpinFn = line.startsWith("@spin ");
       const sigLines = [line];
       let isBodylessDecl = false;
@@ -109,6 +121,9 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
         if (
           peekL.startsWith("pub fn ") ||
           peekL.startsWith("fn ") ||
+          peekL.startsWith("pub iter fn ") ||
+          peekL.startsWith("iter pub fn ") ||
+          peekL.startsWith("iter fn ") ||
           peekL.startsWith("@spin pub fn ") ||
           peekL.startsWith("@spin fn ") ||
           peekL === "}" ||
@@ -173,7 +188,8 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
           masked_effects: fnMaskedEffs,
           is_spin_variadic: isSpinFn || params.some((p) => p.mode === "variadic"),
         });
-        ast.functions = { [key]: newFn, ...ast.functions };
+        ast.functions[key] = newFn;
+        privateFnKeys.push(key);
       } else if (fnMaskedEffs.length > 0) {
         ast.functions[key].masked_effects = fnMaskedEffs;
       }
@@ -218,6 +234,14 @@ export function attachJnImplementations(ast: ModuleAST, jnText: string): void {
     }
 
     i += 1;
+  }
+  if (privateFnKeys.length > 0) {
+    const reordered: Record<string, FnSpec> = {};
+    for (const k of privateFnKeys) reordered[k] = ast.functions[k];
+    for (const [k, v] of Object.entries(ast.functions)) {
+      if (!(k in reordered)) reordered[k] = v;
+    }
+    ast.functions = reordered;
   }
 
   // Auto-synthesize default constructor `Struct.new` from `.jni` field defaults if omitted in `.jn`

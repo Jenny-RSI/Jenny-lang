@@ -261,7 +261,7 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
     }
 
     if (line.startsWith("module ")) {
-      ast.name = line.split(/\s+/)[1].trim();
+      ast.name = line.split(/\s+/)[1].trim().replaceAll("::", "_").replaceAll(".", "_");
       i += 1;
       continue;
     }
@@ -321,8 +321,52 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
           if (mTfn) {
             const tmName = mTfn[1];
             const tmParams = parseParamList(mTfn[2], tname);
-            const [tmRet, tmErr] = parseReturnSpec(mTfn[3].trim());
-            tmethods[tmName] = createFnSpec(tmName, tname, tmParams, tmRet, tmErr);
+            let rawTmRet = mTfn[3].trim();
+            const tmEffects: string[] = [];
+            const mInlEff = /\beffects\s*\[([^\]]+)\]/.exec(rawTmRet);
+            if (mInlEff) {
+              for (const e of mInlEff[1].split(",")) {
+                if (e.trim()) tmEffects.push(e.trim());
+              }
+              rawTmRet = rawTmRet.replace(/\beffects\s*\[[^\]]+\]/, "").trim();
+            }
+            const [tmRet, tmErr] = parseReturnSpec(rawTmRet);
+            const tmReqs: RequiresClause[] = [];
+            const tmEnss: string[] = [];
+            while (i + 1 < n) {
+              const nextTl = lines[i + 1].trim();
+              if (nextTl.startsWith("effects ")) {
+                const mEff = /\[([^\]]+)\]/.exec(nextTl);
+                if (mEff) {
+                  for (const e of mEff[1].split(",")) {
+                    if (e.trim()) tmEffects.push(e.trim());
+                  }
+                }
+                i += 1;
+              } else if (nextTl.startsWith("requires ")) {
+                const rBody = nextTl.slice("requires ".length).trim();
+                const elseIdx = rBody.indexOf(" else ");
+                if (elseIdx !== -1) {
+                  tmReqs.push({
+                    cond: rBody.slice(0, elseIdx).trim(),
+                    else_err: rBody.slice(elseIdx + " else ".length).trim(),
+                  });
+                } else {
+                  tmReqs.push({ cond: rBody, else_err: null });
+                }
+                i += 1;
+              } else if (nextTl.startsWith("ensures ")) {
+                tmEnss.push(nextTl.slice("ensures ".length).trim());
+                i += 1;
+              } else {
+                break;
+              }
+            }
+            tmethods[tmName] = createFnSpec(tmName, tname, tmParams, tmRet, tmErr, {
+              effects: tmEffects,
+              requires: tmReqs,
+              ensures: tmEnss,
+            });
           }
         }
         i += 1;
@@ -377,6 +421,9 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
         const mDel = /^delegate\s+([A-Za-z0-9_]+)\s+to\s+self\.([A-Za-z0-9_]+)$/.exec(sline);
         if (mDel) {
           delegates.push({ trait_name: mDel[1], target_field: mDel[2] });
+          if (!ast.trait_impls.some((ti) => ti.trait_name === mDel[1] && ti.struct_name === sname)) {
+            ast.trait_impls.push({ trait_name: mDel[1], struct_name: sname });
+          }
           i += 1;
           continue;
         }
@@ -427,17 +474,31 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
       continue;
     }
 
-    const mImpl = /^impl\s+(?:[A-Za-z0-9_]+\s+for\s+)?([A-Za-z0-9_]+)\s*\{/.exec(line);
+    const mImpl = /^(?:pub\s+)?impl\s+(?:([A-Za-z0-9_]+)\s+for\s+)?([A-Za-z0-9_]+)\s*\{(\s*\})?$/.exec(line);
     if (mImpl) {
-      currentImpl = mImpl[1];
+      const traitName = mImpl[1] || null;
+      const targetName = mImpl[2];
+      if (traitName && !ast.trait_impls.some((ti) => ti.trait_name === traitName && ti.struct_name === targetName)) {
+        ast.trait_impls.push({ trait_name: traitName, struct_name: targetName });
+      }
+      currentImpl = mImpl[3] ? null : targetName;
       i += 1;
       continue;
     }
 
-    if (line.startsWith("pub fn ") || line.startsWith("@spin pub fn ")) {
+    if (
+      line.startsWith("pub fn ") ||
+      line.startsWith("@spin pub fn ") ||
+      line.startsWith("pub iter fn ") ||
+      line.startsWith("iter pub fn ") ||
+      line.startsWith("iter fn ")
+    ) {
       const isSpinFn = line.startsWith("@spin ");
       const sigLines = [line];
-      while (!sigLines.join(" ").includes("->") || sigLines[sigLines.length - 1].endsWith(",")) {
+      while (
+        sigLines[sigLines.length - 1].endsWith(",") ||
+        (!sigLines.join(" ").includes("->") && !sigLines.join(" ").includes(")"))
+      ) {
         i += 1;
         sigLines.push(lines[i].trim());
       }
@@ -457,7 +518,10 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
         }
         rawRet = rawRet.replace(/\beffects\s*\[[^\]]+\]/, "").trim();
       }
-      const [retTy, errTy] = parseReturnSpec(rawRet);
+      let [retTy, errTy] = parseReturnSpec(rawRet);
+      if (retTy === "Self" && currentImpl) {
+        retTy = currentImpl;
+      }
       const reqs: RequiresClause[] = [];
       const enss: string[] = [];
       i += 1;
@@ -540,10 +604,22 @@ export function parseJniBlueprint(jniText: string): ModuleAST {
           body_lines: [`val _res = ${lhsExpr}`, `assert(_res is Err(${errVar}))`],
         });
       } else {
-        ast.examples.push({
-          title: `${lhsExpr} => ${rhsExp}`,
-          body_lines: [`assert((${lhsExpr}) == (${rhsExp}))`],
-        });
+        const mCallFn = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\(/.exec(lhsExpr);
+        const isFallibleCall =
+          !lhsExpr.endsWith("!") &&
+          mCallFn !== null &&
+          Boolean(ast.functions[mCallFn[1]]?.err_ty);
+        if (isFallibleCall) {
+          ast.examples.push({
+            title: `${lhsExpr} => ${rhsExp}`,
+            body_lines: [`val _ok_val = ${lhsExpr}!`, `assert((_ok_val) == (${rhsExp}))`],
+          });
+        } else {
+          ast.examples.push({
+            title: `${lhsExpr} => ${rhsExp}`,
+            body_lines: [`assert((${lhsExpr}) == (${rhsExp}))`],
+          });
+        }
       }
       i += 1;
       continue;

@@ -197,8 +197,14 @@ def validate_package_graph(
                     }
                 )
 
+        mod_allow_effects = set(allow_effects)
+        if override_allow_effects is None and paths.get("allow_effects"):
+            for me in paths["allow_effects"].split("|"):
+                if me.strip():
+                    mod_allow_effects.add(me.strip())
+
         # Check E0505_UNDECLARED_FFI_IMPORT
-        if ast.c_imports and "Unsafe" not in allow_effects:
+        if ast.c_imports and "Unsafe" not in mod_allow_effects:
             c_headers = ", ".join(ast.c_imports.values())
             diags.append(
                 {
@@ -206,14 +212,14 @@ def validate_package_graph(
                     "severity": "error",
                     "module": mod_id,
                     "offending_token": f'import c "{c_headers}"',
-                    "message": f"Module `{mod_id}` imports external C FFI header `{c_headers}`, but package `{pkg_meta.get('name')}` does not grant `Unsafe` in `Tapestry.toml` `allow_effects = {sorted(allow_effects)}`!",
+                    "message": f"Module `{mod_id}` imports external C FFI header `{c_headers}`, but package `{pkg_meta.get('name')}` does not grant `Unsafe` in `Tapestry.toml` `allow_effects = {sorted(mod_allow_effects)}`!",
                 }
             )
 
         # Check E0503_CAPABILITY_VIOLATION across declared function effects
         for fkey, fspec in ast.functions.items():
             for eff in fspec.effects:
-                if eff in RESTRICTED_CAPABILITY_EFFECTS and eff not in allow_effects:
+                if eff in RESTRICTED_CAPABILITY_EFFECTS and eff not in mod_allow_effects:
                     diags.append(
                         {
                             "code": "E0503_CAPABILITY_VIOLATION",
@@ -221,7 +227,7 @@ def validate_package_graph(
                             "module": mod_id,
                             "function": fkey,
                             "offending_token": f"effects [{eff}]",
-                            "message": f"Function `{fkey}` in `{mod_id}` requests restricted effect `{eff}`, which violates package `{pkg_meta.get('name')}` capability sandbox (`allow_effects = {sorted(allow_effects)}`)!",
+                            "message": f"Function `{fkey}` in `{mod_id}` requests restricted effect `{eff}`, which violates package `{pkg_meta.get('name')}` capability sandbox (`allow_effects = {sorted(mod_allow_effects)}`)!",
                         }
                     )
 

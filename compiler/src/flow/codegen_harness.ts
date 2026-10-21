@@ -5,6 +5,7 @@ import {
   isStructPtrType,
   loadStdFuzzHarnesses,
   mapCType,
+  parseStructFieldInits,
   resultTypedefName,
   translateExpr,
 } from "./codegen_expr.ts";
@@ -22,6 +23,9 @@ export function emitJniHeaderFirewall(ast: ModuleAST, abiHash: string): string {
     '#include "../../compiler/jenny-flow/jenny_rt.h"',
     "",
   ];
+  for (const ename of Object.keys(ast.enums)) {
+    lines.push(`typedef int64_t ${ename};`);
+  }
   for (const [sname, sdecl] of Object.entries(ast.structs)) {
     const kw = sdecl.is_union ? "union" : "struct";
     lines.push(`typedef ${kw} ${sname} {`);
@@ -38,6 +42,48 @@ export function emitJniHeaderFirewall(ast: ModuleAST, abiHash: string): string {
     lines.push(`} ${sname};`);
     lines.push("");
   }
+  const emittedTuples = new Set<string>();
+  const emittedArrs = new Set<string>();
+  const emittedOpts = new Set<string>(["JnOpt_i64", "JnOpt_i32", "JnOpt_str"]);
+  const emittedSlices = new Set<string>(["JnSlice_i64", "JnSlice_u8", "JnSlice_u64", "JnSlice_str"]);
+  const emitCompositeTypedefIfNeeded = (rawTy: string): void => {
+    const ty = rawTy.trim();
+    if (ty.startsWith("(") && ty.endsWith(")")) {
+      const tCname = mapCType(ty);
+      if (!emittedTuples.has(tCname)) {
+        emittedTuples.add(tCname);
+        const tElems = ty.slice(1, -1).split(",").map((x) => x.trim()).filter((x) => x.length > 0);
+        lines.push(`typedef struct { ${tElems.map((te, idx) => `${mapCType(te)} f${idx};`).join(" ")} } ${tCname};`);
+      }
+    } else if (ty.endsWith("?") && !ty.startsWith("*") && !ty.startsWith("^")) {
+      const optCname = mapCType(ty);
+      if (!emittedOpts.has(optCname)) {
+        emittedOpts.add(optCname);
+        const baseTy = ty.slice(0, -1).trim();
+        lines.push(`typedef struct { bool has_val; ${mapCType(baseTy)} val; } ${optCname};`);
+      }
+    } else if (ty.startsWith("[]")) {
+      const sCname = mapCType(ty);
+      if (!emittedSlices.has(sCname)) {
+        emittedSlices.add(sCname);
+        const elemTy = ty.slice(2).trim();
+        lines.push(`typedef struct { ${mapCType(elemTy)}* ptr; int64_t len; } ${sCname};`);
+      }
+    } else {
+      const mArr = /^\[(\d+)\](.+)$/.exec(ty);
+      if (mArr) {
+        const aCname = mapCType(ty);
+        if (!emittedArrs.has(aCname)) {
+          emittedArrs.add(aCname);
+          lines.push(`typedef struct { ${mapCType(mArr[2])} elems[${mArr[1]}]; } ${aCname};`);
+        }
+      }
+    }
+  };
+  for (const fn of Object.values(ast.functions)) {
+    for (const p of fn.params) emitCompositeTypedefIfNeeded(p.ty);
+    emitCompositeTypedefIfNeeded(fn.ret_ty);
+  }
   for (const fspec of Object.values(ast.functions)) {
     if (fspec.is_spin_variadic) {
       continue;
@@ -50,8 +96,10 @@ export function emitJniHeaderFirewall(ast: ModuleAST, abiHash: string): string {
     const retC = fspec.err_ty ? resultTypedefName(fspec) : mapCType(fspec.ret_ty);
     const cParams: string[] = [];
     for (const p of fspec.params) {
-      if (p.name === "self") {
-        cParams.push(p.mode === "mut" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`);
+      if (p.name === "self" && p.ty in ast.enums) {
+        cParams.push(`${mapCType(p.ty)} self`);
+      } else if (p.name === "self") {
+        cParams.push(p.mode === "mut" || p.mode === "own" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`);
       } else if (isStructPtrType(p.ty)) {
         cParams.push(`${mapCType(p.ty)} ${p.name}`);
       } else if (p.mode === "mut" && (p.ty === "Arena" || p.ty in ast.structs)) {
@@ -86,6 +134,37 @@ export function emitExampleRunnersAndFuzzSuite(
     while (bIdx < exLines.length) {
       const stmt = exLines[bIdx];
 
+      const mDowncast = /^(\}\s*else\s+if|else\s+if|if)\s+([A-Za-z_][A-Za-z0-9_]*)\s+is\s+([A-Za-z_][A-Za-z0-9_]*)\(([A-Za-z_][A-Za-z0-9_]*)\)\s*\{$/.exec(stmt);
+      if (mDowncast && mDowncast[3] in ast.structs) {
+        const [kw, dynVar, targetStruct, bindVar] = [mDowncast[1].trim(), mDowncast[2], mDowncast[3], mDowncast[4]];
+        exPtrVars.add(bindVar);
+        exVarTypes[bindVar] = targetStruct;
+        out.push(
+          `    ${kw} ((${dynVar}.vtable != NULL) && (${dynVar}.vtable->type_id == JN_TYPE_ID_${targetStruct})) {`,
+          `        const ${targetStruct}* ${bindVar} = (const ${targetStruct}*)${dynVar}.data;`,
+        );
+        bIdx += 1;
+        continue;
+      }
+
+      if (stmt.startsWith("if ") && stmt.endsWith("{")) {
+        const ifCond = stmt.slice(3, -1).trim();
+        out.push(`    if (${translateExpr(ifCond, ast, null, null, exPtrVars, exVarTypes)}) {`);
+        bIdx += 1;
+        continue;
+      }
+      if ((stmt.startsWith("} else if ") || stmt.startsWith("else if ")) && stmt.endsWith("{")) {
+        const prefix = stmt.startsWith("} else if ") ? "} else if " : "else if ";
+        out.push(`    ${prefix.trim()} (${translateExpr(stmt.slice(prefix.length, -1).trim(), ast, null, null, exPtrVars, exVarTypes)}) {`);
+        bIdx += 1;
+        continue;
+      }
+      if (stmt === "} else {" || stmt === "else {") {
+        out.push(`    ${stmt}`);
+        bIdx += 1;
+        continue;
+      }
+
       if (stmt.startsWith("while ") && stmt.endsWith("{")) {
         const wCond = stmt.slice("while ".length, -1).trim();
         out.push(`    while (${translateExpr(wCond, ast, null, null, exPtrVars, exVarTypes)}) {`);
@@ -98,15 +177,28 @@ export function emitExampleRunnersAndFuzzSuite(
         continue;
       }
 
-      const mAssertIs = /^assert\(([A-Za-z0-9_]+)\s+is\s+(?:Err\(([A-Za-z0-9_.]+)\)|([A-Za-z0-9_.]+))\)$/.exec(stmt);
-      if (mAssertIs) {
-        const vname = mAssertIs[1];
+      const mAssertIs = /^assert\((.+?)\s+is\s+(?:Err\(([A-Za-z0-9_.]+)\)|([A-Za-z0-9_.]+))\)$/.exec(stmt);
+      if (mAssertIs && !(mAssertIs[3] && mAssertIs[3] in ast.structs)) {
+        const lhsExpr = translateExpr(mAssertIs[1].trim(), ast, null, null, exPtrVars, exVarTypes);
         const errVariant = mAssertIs[2] || mAssertIs[3];
         const expectedTag = translateExpr(errVariant, ast, null, null, exPtrVars, exVarTypes);
         const escaped = stmt.replaceAll('"', '\\"');
-        out.push(
-          `    if (!(${vname}.is_err && ${vname}.err.err_tag == ${expectedTag})) jn_contract_fail("example_assert", "example_${idx}", "${escaped}");`,
-        );
+        const fnPrefix = lhsExpr.split("(")[0].trim();
+        const matchedSpec = lhsExpr.includes("(")
+          ? Object.values(ast.functions).find((fs) => cFnName(fs) === fnPrefix)
+          : undefined;
+        if (matchedSpec && matchedSpec.err_ty) {
+          const resTy = resultTypedefName(matchedSpec);
+          const tmpVar = `_is_err_${bIdx}`;
+          out.push(`    ${resTy} ${tmpVar} = ${lhsExpr};`);
+          out.push(
+            `    if (!(${tmpVar}.is_err && ${tmpVar}.err.err_tag == ${expectedTag})) jn_contract_fail("example_assert", "example_${idx}", "${escaped}");`,
+          );
+        } else {
+          out.push(
+            `    if (!((${lhsExpr}).is_err && (${lhsExpr}).err.err_tag == ${expectedTag})) jn_contract_fail("example_assert", "example_${idx}", "${escaped}");`,
+          );
+        }
         bIdx += 1;
         continue;
       }
@@ -168,15 +260,96 @@ export function emitExampleRunnersAndFuzzSuite(
         }
         const explTy = mDecl[2] ? mDecl[2].trim() : null;
         const rhs = mDecl[3].trim();
-        const cRhs = translateExpr(rhs, ast, null, null, exPtrVars, exVarTypes);
+        const mCl2 = /^fn\(\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*,\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*\)(?:\s*->\s*[A-Za-z0-9_]+)?\s*=>\s*(.+)$/.exec(rhs);
+        const mCl1 = /^fn\(\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*\)(?:\s*->\s*([A-Za-z0-9_]+))?\s*=>\s*(.+)$/.exec(rhs);
+        const mCl0 = /^fn\(\s*\)(?:\s*->\s*[A-Za-z0-9_]+)?\s*=>\s*(.+)$/.exec(rhs);
+        if (mCl0) {
+          const cBodyRaw = mCl0[1].trim();
+          const cid = `ex_${idx}_${bIdx}`;
+          const cBodyTrans = translateExpr(cBodyRaw, ast, null, null, exPtrVars, exVarTypes);
+          liftedClosuresDefs.push(
+            `typedef struct _JnClosureEnv_${cid} { int64_t _unused; } _JnClosureEnv_${cid};`,
+            `static int64_t _jn_closure_call_${cid}(const void* _raw_env) { (void)_raw_env; return ${cBodyTrans}; }`,
+            "",
+          );
+          exVarTypes[vname] = "fn() -> i64";
+          out.push(
+            `    _JnClosureEnv_${cid} _cenv_${cid} = (_JnClosureEnv_${cid}){ ._unused = 0 };`,
+            `    JnFn_void_to_i64 ${vname} = ((JnFn_void_to_i64){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} });`,
+          );
+          bIdx += 1;
+          continue;
+        }
+        if (mCl2) {
+          const [pA, pB, cBodyRaw] = [mCl2[1], mCl2[2], mCl2[3].trim()];
+          const cid = `ex_${idx}_${bIdx}`;
+          const cBodyTrans = translateExpr(cBodyRaw, ast, null, null, exPtrVars, exVarTypes);
+          liftedClosuresDefs.push(
+            `typedef struct _JnClosureEnv_${cid} { int64_t _unused; } _JnClosureEnv_${cid};`,
+            `static int64_t _jn_closure_call_${cid}(const void* _raw_env, int64_t ${pA}, int64_t ${pB}) { (void)_raw_env; return ${cBodyTrans}; }`,
+            "",
+          );
+          exVarTypes[vname] = "fn(i64, i64) -> i64";
+          out.push(
+            `    _JnClosureEnv_${cid} _cenv_${cid} = (_JnClosureEnv_${cid}){ ._unused = 0 };`,
+            `    JnFn_i64_i64_to_i64 ${vname} = ((JnFn_i64_i64_to_i64){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} });`,
+          );
+          bIdx += 1;
+          continue;
+        }
+        if (mCl1) {
+          const [pX, retTyRaw, cBodyRaw] = [mCl1[1], (mCl1[2] || "i64").trim(), mCl1[3].trim()];
+          const cid = `ex_${idx}_${bIdx}`;
+          const cBodyTrans = translateExpr(cBodyRaw, ast, null, null, exPtrVars, exVarTypes);
+          const cRet = retTyRaw === "bool" ? "bool" : "int64_t";
+          const fnStruct = retTyRaw === "bool" ? "JnFn_i64_to_bool" : "JnFn_i64_to_i64";
+          liftedClosuresDefs.push(
+            `typedef struct _JnClosureEnv_${cid} { int64_t _unused; } _JnClosureEnv_${cid};`,
+            `static ${cRet} _jn_closure_call_${cid}(const void* _raw_env, int64_t ${pX}) { (void)_raw_env; return ${cBodyTrans}; }`,
+            "",
+          );
+          exVarTypes[vname] = retTyRaw === "bool" ? "fn(i64) -> bool" : "fn(i64) -> i64";
+          out.push(
+            `    _JnClosureEnv_${cid} _cenv_${cid} = (_JnClosureEnv_${cid}){ ._unused = 0 };`,
+            `    ${fnStruct} ${vname} = ((${fnStruct}){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} });`,
+          );
+          bIdx += 1;
+          continue;
+        }
+        const mStructLit = /^([A-Za-z_][A-Za-z0-9_]*)\s*\{(.*)\}$/.exec(rhs);
+        let cRhs = translateExpr(rhs, ast, null, null, exPtrVars, exVarTypes);
         const fnPrefix = cRhs.split("(")[0].trim();
         const matchedSpec = Object.values(ast.functions).find((fs) => cFnName(fs) === fnPrefix) ?? null;
         let cTy: string;
-        if (explTy) {
+        if (mStructLit && mStructLit[1] in ast.structs) {
+          const sname = mStructLit[1];
+          const finits = parseStructFieldInits(mStructLit[2], ast, null, exPtrVars, sname, exVarTypes);
+          cTy = sname;
+          exVarTypes[vname] = sname;
+          cRhs = `(${sname}){ ${finits} }`;
+        } else if (explTy) {
           cTy = mapCType(explTy);
-          exVarTypes[vname] = isClosureType(explTy) ? explTy : stripPtrAndOpt(explTy);
+          exVarTypes[vname] = explTy.startsWith("dyn ") || explTy.startsWith("[]") || isClosureType(explTy) ? explTy : stripPtrAndOpt(explTy);
           if (isStructPtrType(explTy)) {
             exPtrVars.add(vname);
+          }
+          if (/^\[\d+\]/.test(explTy) && rhs.startsWith("[") && rhs.endsWith("]")) {
+            cRhs = `((${cTy}){ .elems = { ${rhs.slice(1, -1)} } })`;
+          } else if ((explTy === "[]i64" || explTy === "[]u8" || explTy === "[]u64" || explTy === "[]str") && rhs.startsWith("[") && rhs.endsWith("]")) {
+            const inner = rhs.slice(1, -1).trim();
+            const elemC = explTy === "[]u8" ? "uint8_t" : explTy === "[]u64" ? "uint64_t" : explTy === "[]str" ? "jn_str" : "int64_t";
+            const sliceC = explTy === "[]u8" ? "JnSlice_u8" : explTy === "[]u64" ? "JnSlice_u64" : explTy === "[]str" ? "JnSlice_str" : "JnSlice_i64";
+            if (!inner) {
+              cRhs = `((${sliceC}){ .ptr = NULL, .len = 0 })`;
+            } else {
+              const elems = inner.split(",").map((e) => translateExpr(e.trim(), ast, null, null, exPtrVars, exVarTypes));
+              cRhs = `((${sliceC}){ .ptr = (${elemC}[]){ ${elems.join(", ")} }, .len = ${elems.length} })`;
+            }
+          } else if (explTy.startsWith("dyn ") && rhs in exVarTypes && exVarTypes[rhs] in ast.structs) {
+            const tname = explTy.slice(4).trim();
+            const argTy = exVarTypes[rhs];
+            const ptrExpr = exPtrVars.has(rhs) ? rhs : `&${rhs}`;
+            cRhs = `((JnDyn_${tname}){ .data = (void*)${ptrExpr}, .vtable = &JnVTable_${tname}_for_${argTy} })`;
           }
         } else if (rhs.startsWith("Arena.new")) {
           cTy = "JnArena";
@@ -213,7 +386,7 @@ export function emitExampleRunnersAndFuzzSuite(
           cTy = "jn_str";
           exVarTypes[vname] = "str";
         } else {
-          cTy = "int32_t";
+          cTy = "int64_t";
         }
         out.push(`    ${cTy} ${vname} = ${cRhs};`);
         bIdx += 1;
@@ -241,7 +414,7 @@ export function emitExampleRunnersAndFuzzSuite(
   out.push("    int _scalar_calls = 0;");
   out.push("    int _stateful_calls = 0;");
   out.push("    int _example_replays = 0;");
-  const scalarTys = new Set(["i64", "i32", "u32", "u16", "u8", "usize", "bool"]);
+  const scalarTys = new Set(["i64", "i32", "i16", "i8", "isize", "u64", "u32", "u16", "u8", "usize", "bool", "char"]);
   for (const fspec of Object.values(ast.functions)) {
     if (
       !fspec.struct_owner &&
@@ -262,6 +435,10 @@ export function emitExampleRunnersAndFuzzSuite(
         const cPty = mapCType(p.ty);
         if (p.ty === "bool") {
           out.push(`        ${cPty} ${p.name} = (_i + ${pIdx}) % 2 == 0;`);
+        } else if (p.ty === "char") {
+          out.push(
+            `        ${cPty} ${p.name} = (${cPty})((_seed * 0x2545F4914F6CDD1DULL) % 128ULL);`,
+          );
         } else {
           out.push(
             `        ${cPty} ${p.name} = (${cPty})((_i < 16) ? _bvals[(_i + ${pIdx} * 3) & 15] : (int64_t)((_seed * 0x2545F4914F6CDD1DULL) % 120ULL) - 20);`,

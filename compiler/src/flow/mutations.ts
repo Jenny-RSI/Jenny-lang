@@ -192,6 +192,17 @@ export function runStage3Mutations(
       ),
       jn_code: null as string | null,
     },
+    {
+      id: "MUT-S3-E0507",
+      dir: b18Dir,
+      expected_code: "E0507_SEMVER_STRENGTHENED_REQUIRES",
+      desc: "Strengthen precondition on `MemKvStore.read_slot` with `requires slot >= 0` not present on `KvEngine.read_slot` under `impl KvEngine for MemKvStore {}`",
+      jni_code: b18Jni.replace(
+        "impl MemKvStore {\n    pub fn new(s0: i64, s1: i64, s2: i64, s3: i64) -> MemKvStore\n        ensures result.writes == 0\n\n    pub fn read_slot(self, slot: i64) -> i64",
+        "impl KvEngine for MemKvStore {}\n\nimpl MemKvStore {\n    pub fn new(s0: i64, s1: i64, s2: i64, s3: i64) -> MemKvStore\n        ensures result.writes == 0\n\n    pub fn read_slot(self, slot: i64) -> i64\n        requires slot >= 0",
+      ),
+      jn_code: null as string | null,
+    },
   ];
 
   const results: Record<string, any>[] = [];

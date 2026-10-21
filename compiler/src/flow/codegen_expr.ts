@@ -1,11 +1,47 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { FnSpec, ModuleAST } from "./ast.ts";
-import { ROOT_DIR } from "./ast.ts";
+import { ROOT_DIR, splitTopLevelCommas } from "./ast.ts";
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+const SCALAR_C_TYPES: Record<string, string> = {
+  i8: "int8_t",
+  u8: "uint8_t",
+  i16: "int16_t",
+  u16: "uint16_t",
+  i32: "int32_t",
+  i64: "int64_t",
+  i128: "__int128",
+  u32: "uint32_t",
+  u64: "uint64_t",
+  u128: "unsigned __int128",
+  isize: "ptrdiff_t",
+  usize: "size_t",
+  f16: "uint16_t",
+  f32: "float",
+  f64: "double",
+  bool: "bool",
+  char: "uint32_t",
+  str: "jn_str",
+  String: "JnString",
+  void: "int32_t",
+  never: "int32_t",
+  Arena: "JnArena",
+  T: "int64_t",
+  U: "int64_t",
+  A: "int64_t",
+  B: "int64_t",
+  C: "int64_t",
+  D: "int64_t",
+  E: "int64_t",
+  F: "int64_t",
+  K: "int64_t",
+  V: "int64_t",
+  S: "int64_t",
+};
 
 export function isClosureType(ty: string): boolean {
   return /^(\*|\^)?fn\s*\(/.test(ty.trim());
@@ -13,7 +49,11 @@ export function isClosureType(ty: string): boolean {
 
 export function isStructPtrType(ty: string): boolean {
   const s = ty.trim();
-  return (s.startsWith("*") || s.startsWith("^")) && !isClosureType(s);
+  if ((!s.startsWith("*") && !s.startsWith("^")) || isClosureType(s)) {
+    return false;
+  }
+  const inner = s.slice(1).replace(/\?+$/, "").trim();
+  return !(inner in SCALAR_C_TYPES);
 }
 
 export function mapCType(ty: string): string {
@@ -24,7 +64,16 @@ export function mapCType(ty: string): string {
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
-    return "JnTuple_" + tElems.map((x) => x.replace(/[^A-Za-z0-9_]/g, "")).join("_");
+    return "JnTuple_" + tElems.map((x) => x.replace(/\[\]/g, "Slice_").replace(/[^A-Za-z0-9_]/g, "")).join("_");
+  }
+  if (/^fn\s*\(\s*\)/.test(jnTy)) {
+    return "JnFn_void_to_i64";
+  }
+  if (/^fn\s*\([^,)]+,\s*[^,)]+\)/.test(jnTy)) {
+    return "JnFn_i64_i64_to_i64";
+  }
+  if (/^fn\s*\([^)]*\)\s*->\s*bool$/.test(jnTy)) {
+    return "JnFn_i64_to_bool";
   }
   if (/^fn\s*\(/.test(jnTy)) {
     return "JnFn_i64_to_i64";
@@ -40,7 +89,13 @@ export function mapCType(ty: string): string {
     return `JnDyn_${tname}`;
   }
   if (jnTy.startsWith("*")) {
-    const inner = jnTy.slice(1).trim();
+    const inner = jnTy.slice(1).replace(/\?+$/, "").trim();
+    if (inner === "u8") {
+      return "jn_raw_ptr";
+    }
+    if (inner in SCALAR_C_TYPES) {
+      return `${SCALAR_C_TYPES[inner]}*`;
+    }
     return `struct ${inner}*`;
   }
   if (jnTy.startsWith("^")) {
@@ -49,30 +104,25 @@ export function mapCType(ty: string): string {
   }
   if (jnTy.endsWith("?")) {
     const base = jnTy.slice(0, -1).trim();
+    if (base === "T" || base === "U") {
+      return "JnOpt_i64";
+    }
     return `JnOpt_${base}`;
+  }
+  if (jnTy.startsWith("[]")) {
+    const elemClean = jnTy.slice(2).trim().replace(/[^A-Za-z0-9_]/g, "");
+    if (elemClean === "T" || elemClean === "U") {
+      return "JnSlice_i64";
+    }
+    return `JnSlice_${elemClean}`;
   }
   const mArr = /^\[(\d+)\](.+)$/.exec(jnTy);
   if (mArr) {
-    return mapCType(mArr[2]);
+    const elemClean = mArr[2].trim().replace(/[^A-Za-z0-9_]/g, "");
+    return `JnArr_${mArr[1]}_${elemClean}`;
   }
-  const mapping: Record<string, string> = {
-    i8: "int8_t",
-    u8: "uint8_t",
-    i16: "int16_t",
-    u16: "uint16_t",
-    i32: "int32_t",
-    i64: "int64_t",
-    u32: "uint32_t",
-    u64: "uint64_t",
-    usize: "size_t",
-    f64: "double",
-    bool: "bool",
-    str: "jn_str",
-    String: "JnString",
-    void: "int32_t",
-    Arena: "JnArena",
-  };
-  return mapping[jnTy] ?? jnTy;
+  const strippedGen = jnTy.replace(/<[^>]*>/g, "").trim();
+  return SCALAR_C_TYPES[strippedGen] ?? strippedGen;
 }
 
 export function cFnName(fn: FnSpec): string {
@@ -298,10 +348,69 @@ export function translateExpr(
     s = tern;
   }
 
-  // 6. Handle `some(v)` and `null`
-  s = s.replace(/\bsome\(([^)]+)\)/g, "jn_some_i64($1)");
+  // 6. Handle `some(v)`, `none`, and `null`
+  const optStructTy =
+    currentFn && currentFn.ret_ty.endsWith("?") && currentFn.ret_ty !== "i64?"
+      ? currentFn.ret_ty
+      : Object.values(ast.functions)
+          .flatMap((f) => f.params.map((p) => p.ty))
+          .find((ty) => ty.endsWith("?") && ty !== "i64?" && !ty.startsWith("*") && !ty.startsWith("^"));
+  if (optStructTy) {
+    const optCname = mapCType(optStructTy);
+    s = s.replace(/(?<!\.)\bsome\(([^)]+)\)/g, `((${optCname}){ .has_val = true, .val = $1 })`);
+    s = s.replace(/(?<!\.)\bnone\b/g, `((${optCname}){ .has_val = false })`);
+  }
+  if (currentFn && currentFn.ret_ty === "i64?") {
+    s = s.replace(/(?<!\.)\bnone\b/g, "jn_null_i64()");
+  }
+  s = s.replace(/(?<!\.)\bsome\(([^)]+)\)/g, "jn_some_i64($1)");
   const hasI64Opt = Object.values(ast.functions).some((f) => f.params.some((p) => p.ty.includes("i64?")));
-  s = s.replace(/\bnull\b/g, hasI64Opt ? "jn_null_i64()" : "NULL");
+  s = s.replace(/(?<!\.)\bnull\b/g, hasI64Opt ? "jn_null_i64()" : "NULL");
+
+
+  // 6b. Handle top-level fixed-size value array literal `[e0, e1, ...]` and tuple literal `(e0, e1, ...)`
+  if (
+    s.startsWith("[") &&
+    s.endsWith("]") &&
+    !s.includes(";") &&
+    currentFn &&
+    /^\[\d+\]/.test(currentFn.ret_ty)
+  ) {
+    const parts = splitTopLevelCommas(s.slice(1, -1));
+    const arrCName = mapCType(currentFn.ret_ty);
+    const transParts = parts.map((p) => translateExpr(p, ast, currentFn, oldMap, pVars, vTypes));
+    return `((${arrCName}){ .elems = { ${transParts.join(", ")} } })`;
+  }
+  if (
+    s.startsWith("(") &&
+    s.endsWith(")") &&
+    currentFn &&
+    currentFn.ret_ty.startsWith("(") &&
+    currentFn.ret_ty.endsWith(")")
+  ) {
+    let depth = 0;
+    let outerMatches = true;
+    for (let idx = 0; idx < s.length - 1; idx++) {
+      if (s[idx] === "(") depth += 1;
+      else if (s[idx] === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          outerMatches = false;
+          break;
+        }
+      }
+    }
+    if (outerMatches) {
+      const parts = splitTopLevelCommas(s.slice(1, -1));
+      if (parts.length >= 2 && !parts.some((p) => Object.keys(ast.enums).some((en) => p.startsWith(`${en}.`)))) {
+        const tupCName = mapCType(currentFn.ret_ty);
+        const transFields = parts.map(
+          (p, idx) => `.f${idx} = ${translateExpr(p, ast, currentFn, oldMap, pVars, vTypes)}`,
+        );
+        return `((${tupCName}){ ${transFields.join(", ")} })`;
+      }
+    }
+  }
 
   // 7. Handle built-in runtime functions & static constructors via `library/std/rt/builtin_dispatch.json`
   const bdisp = loadBuiltinDispatch();
@@ -330,7 +439,7 @@ export function translateExpr(
     },
   );
 
-  // 7a. Handle first-class Tuple indexing and primitive type methods (`str`, `String`, `bool`) via dispatch table
+  // 7a. Handle first-class Tuple indexing (`.0`, `.1`) and value-array indexing (`arr[i]`)
   s = s.replace(
     /\b([A-Za-z_][A-Za-z0-9_]*)\.([0-9]+)\b/g,
     (fullMatch, recv: string, idxStr: string, offset: number, wholeStr: string) => {
@@ -343,10 +452,26 @@ export function translateExpr(
       if (quoteCount % 2 === 1) {
         return fullMatch;
       }
-      if (recv in vTypes && !vTypes[recv].startsWith("(")) {
-        return fullMatch;
-      }
       return `${recv}.f${idxStr}`;
+    },
+  );
+
+  s = s.replace(
+    /\b([A-Za-z_][A-Za-z0-9_]*)\[([^\]]+)\]/g,
+    (fullMatch, recv: string, idxExpr: string) => {
+      const isSlice =
+        (vTypes[recv] && vTypes[recv].startsWith("[]")) ||
+        (recv === "result" && currentFn && currentFn.ret_ty.startsWith("[]"));
+      if (isSlice) {
+        return `${recv}.ptr[${idxExpr}]`;
+      }
+      const isValArr =
+        (vTypes[recv] && /^\[\d+\]/.test(vTypes[recv])) ||
+        (recv === "result" && currentFn && /^\[\d+\]/.test(currentFn.ret_ty));
+      if (isValArr) {
+        return `${recv}${pVars.has(recv) ? "->" : "."}elems[${idxExpr}]`;
+      }
+      return fullMatch;
     },
   );
 
@@ -356,15 +481,25 @@ export function translateExpr(
   const boolM = primMethods.bool ?? {};
 
   const resolveRecvTy = (recv: string): string | undefined => {
-    return recv === "self" && currentFn && currentFn.struct_owner
-      ? currentFn.struct_owner
-      : vTypes[recv];
+    if (recv === "self" && currentFn && currentFn.struct_owner) {
+      return currentFn.struct_owner;
+    }
+    if (recv === "result" && currentFn) {
+      return currentFn.ret_ty;
+    }
+    return vTypes[recv];
   };
 
   s = s.replace(
     /\b((?:[A-Za-z_][A-Za-z0-9_]*(?:\.|->))*[A-Za-z_][A-Za-z0-9_]*)\.len\(\)/g,
     (fullMatch, recv: string) => {
       const knownTy = resolveRecvTy(recv);
+      if (knownTy && knownTy.startsWith("[]")) {
+        return `(${recv}.len)`;
+      }
+      if ((recv === "result.f0" || recv === "result.f1") && currentFn && currentFn.ret_ty.includes("[]")) {
+        return `(${recv}.len)`;
+      }
       if (knownTy === "String") {
         return `${stringM.len ?? "jn_string_len"}(${recv})`;
       }
@@ -376,7 +511,21 @@ export function translateExpr(
   );
 
   s = s.replace(
-    /\b([A-Za-z_][A-Za-z0-9_]*)\.byte_at\(([^)]+)\)/g,
+    /\b([A-Za-z_][A-Za-z0-9_]*)\.sub_slice\(([^)]+)\)/g,
+    (fullMatch, recv: string, args: string) => {
+      const knownTy = resolveRecvTy(recv);
+      if (knownTy === "[]i64") {
+        return `jn_slice_i64_sub(${recv}, ${args})`;
+      }
+      if (knownTy === "[]u8") {
+        return `jn_slice_u8_sub(${recv}, ${args})`;
+      }
+      return fullMatch;
+    },
+  );
+
+  s = s.replace(
+    /\b((?:[A-Za-z_][A-Za-z0-9_]*(?:\.|->))*[A-Za-z_][A-Za-z0-9_]*)\.byte_at\(([^)]+)\)/g,
     (fullMatch, recv: string, arg: string) => {
       const knownTy = resolveRecvTy(recv);
       if (knownTy === "String") {
@@ -398,7 +547,18 @@ export function translateExpr(
   });
 
   s = s.replace(
-    /\b([A-Za-z_][A-Za-z0-9_]*)\.eq_str\(([^)]+)\)/g,
+    /\b((?:[A-Za-z_][A-Za-z0-9_]*(?:\.|->))*[A-Za-z_][A-Za-z0-9_]*)\.sub_str\(([^)]+)\)/g,
+    (fullMatch, recv: string, args: string) => {
+      const knownTy = resolveRecvTy(recv);
+      if (knownTy && knownTy in ast.structs) {
+        return fullMatch;
+      }
+      return `${strM.sub_str ?? "jn_str_sub"}(${recv}, ${args})`;
+    },
+  );
+
+  s = s.replace(
+    /\b([A-Za-z_][A-Za-z0-9_]*\([^()]*\)|(?:[A-Za-z_][A-Za-z0-9_]*(?:\.|->))*[A-Za-z_][A-Za-z0-9_]*)\.eq_str\(([^)]+)\)/g,
     (fullMatch, recv: string, arg: string) => {
       const knownTy = resolveRecvTy(recv);
       if (knownTy === "String") {
@@ -408,17 +568,6 @@ export function translateExpr(
         return fullMatch;
       }
       return `${strM.eq_str ?? "jn_str_eq"}(${recv}, ${arg})`;
-    },
-  );
-
-  s = s.replace(
-    /\b([A-Za-z_][A-Za-z0-9_]*)\.sub_str\(([^)]+)\)/g,
-    (fullMatch, recv: string, args: string) => {
-      const knownTy = resolveRecvTy(recv);
-      if (knownTy && knownTy in ast.structs) {
-        return fullMatch;
-      }
-      return `${strM.sub_str ?? "jn_str_sub"}(${recv}, ${args})`;
     },
   );
 
@@ -437,7 +586,7 @@ export function translateExpr(
   });
 
   s = s.replace(
-    /\b([A-Za-z_][A-Za-z0-9_]*)\.as_raw_ptr\(\)/g,
+    /\b((?:[A-Za-z_][A-Za-z0-9_]*(?:\.|->))*[A-Za-z_][A-Za-z0-9_]*)\.as_raw_ptr\(\)/g,
     `${strM.as_raw_ptr ?? "jn_str_as_raw_ptr"}($1)`,
   );
   for (const calias of Object.keys(ast.c_imports)) {
@@ -446,7 +595,7 @@ export function translateExpr(
 
   // 7b. Handle call-site `mut x` and `own x` argument modifiers
   s = s.replace(/\bmut\s+([A-Za-z_][A-Za-z0-9_]*)\b/g, (_m, v: string) =>
-    pVars.has(v) ? v : `&${v}`,
+    pVars.has(v) || (vTypes[v] && vTypes[v].startsWith("[]")) ? v : `&${v}`,
   );
   s = s.replace(/\bown\s+([A-Za-z_][A-Za-z0-9_]*)\b/g, "$1");
 
@@ -482,14 +631,23 @@ export function translateExpr(
     return `jn_mk_str(${lit})`;
   });
 
-  // 9. Replace `x.as<T>()` with `((c_type)(x))`
-  s = s.replace(
-    /([A-Za-z0-9_.]+)\.as<([A-Za-z0-9_]+)>\(\)/g,
-    (_m, inner: string, tyName: string) => {
-      const targetT = mapCType(tyName);
-      return `((${targetT})(${inner}))`;
-    },
-  );
+  // 9. Replace `x.as<T>()`, `(expr).as<T>()`, or `x as T` / `(expr) as T` with `((c_type)(x))`
+  for (let pass = 0; pass < 2; pass++) {
+    s = s.replace(
+      /(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[A-Za-z0-9_.\->]+(?:\[[^\]]*\][A-Za-z0-9_.\->]*)*)\.as<([A-Za-z0-9_]+)>\(\)/g,
+      (_m, inner: string, tyName: string) => {
+        const targetT = mapCType(tyName);
+        return `((${targetT})(${inner}))`;
+      },
+    );
+    s = s.replace(
+      /(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[A-Za-z0-9_.\->]+(?:\[[^\]]*\][A-Za-z0-9_.\->]*)*)\s+as\s+(i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f16|bf16|f32|f64|bool|char|byte)\b/g,
+      (_m, inner: string, tyName: string) => {
+        const targetT = mapCType(tyName);
+        return `((${targetT})(${inner}))`;
+      },
+    );
+  }
 
   // 10. Replace Enum.Variant with ErrTag_Enum_Variant and lower first-class enum-tagged tuples `(val, Enum.X[, param])`
   for (const [ename, edecl] of Object.entries(ast.enums)) {
@@ -498,16 +656,24 @@ export function translateExpr(
       s = s.replace(new RegExp(`\\b${escEname}\\.${escapeRegExp(v)}\\b`, "g"), `ErrTag_${ename}_${v}`);
     }
     s = s.replace(
-      new RegExp(`\\(([^(),]+),\\s*(ErrTag_${escEname}_[A-Za-z0-9_]+),\\s*([^(),]+)\\)`, "g"),
+      new RegExp(`(?<![A-Za-z0-9_])\\(([^(),]+),\\s*(ErrTag_${escEname}_[A-Za-z0-9_]+),\\s*([^(),]+)\\)`, "g"),
       `((JnTuple_i64_${ename}_i64){ $1, $2, $3 })`,
     );
     s = s.replace(
-      new RegExp(`\\(([^(),]+),\\s*(ErrTag_${escEname}_[A-Za-z0-9_]+)\\)`, "g"),
+      new RegExp(`(?<![A-Za-z0-9_])\\(([^(),]+),\\s*(ErrTag_${escEname}_[A-Za-z0-9_]+)\\)`, "g"),
       `((JnTuple_i64_${ename}){ $1, $2 })`,
     );
   }
 
-  // 11. Replace static Struct methods (`Struct.new(...)`, `Struct.decode_header(...)`) with `Struct_method(...)`
+  // 10b. Handle `elem is ConcreteStruct` O(1) 64-bit `type_id` check on `dyn Trait`
+  for (const sname of Object.keys(ast.structs)) {
+    s = s.replace(
+      new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\s+is\\s+${escapeRegExp(sname)}\\b`, "g"),
+      `((($1).vtable != NULL) && (($1).vtable->type_id == JN_TYPE_ID_${sname}))`,
+    );
+  }
+
+  // 11. Replace static Struct/Enum methods (`Struct.new(...)`, `Struct.decode_header(...)`) with `Struct_method(...)`
   for (const sname of Object.keys(ast.structs)) {
     s = s.replace(new RegExp(`\\b${escapeRegExp(sname)}\\.new\\s*\\(`, "g"), `${sname}_new(`);
   }
@@ -548,6 +714,9 @@ export function translateExpr(
           if (args) {
             return `${vname}.call(${vname}.env, ${args})`;
           }
+          if (/^fn\s*\(\s*\)/.test(vty.trim())) {
+            return `${vname}.call(${vname}.env)`;
+          }
           return `${vname}.call(${vname}.env, 0)`;
         },
       );
@@ -575,7 +744,7 @@ export function translateExpr(
             const accessOp = pVars.has(holderVar) ? "->" : ".";
             s = s.replace(
               new RegExp(
-                `\\b${escapeRegExp(holderVar)}\\.${escapeRegExp(fld.name)}\\.${escapeRegExp(mname)}\\(((?:[^()]|\\([^()]*\\))*)\\)`,
+                `\\b${escapeRegExp(holderVar)}\\.${escapeRegExp(fld.name)}\\.${escapeRegExp(mname)}\\(((?:[^()]|\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))*)\\)`,
                 "g",
               ),
               (_m, rawArgs: string) => {
@@ -592,25 +761,26 @@ export function translateExpr(
     }
   }
 
-  // 12. Replace method calls on structs (run 2 passes to support nested `self.m1(self.m2(x))`)
+  // 12. Replace method calls on structs and enums (run 2 passes to support nested `self.m1(self.m2(x))`)
   for (let pass = 0; pass < 2; pass++) {
     for (const fspec of Object.values(ast.functions)) {
       if (fspec.struct_owner && fspec.params.some((p) => p.name === "self")) {
         const mname = fspec.name;
         const cname = cFnName(fspec);
         const ownerTy = fspec.struct_owner;
+        const isEnumOwner = ownerTy in ast.enums;
         s = s.replace(
-          new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\.${escapeRegExp(mname)}\\(((?:[^()]|\\([^()]*\\))*)\\)`, "g"),
+          new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\.${escapeRegExp(mname)}\\(((?:[^()]|\\((?:[^()]|\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))*\\))*)\\)`, "g"),
           (fullMatch, recv: string, rawArgs: string) => {
             const args = rawArgs.trim();
             const knownTy =
               recv === "self" && currentFn && currentFn.struct_owner
                 ? currentFn.struct_owner
                 : vTypes[recv];
-            if (knownTy && knownTy in ast.structs && knownTy !== ownerTy) {
+            if (knownTy && (knownTy in ast.structs || knownTy in ast.enums) && knownTy !== ownerTy) {
               return fullMatch;
             }
-            const recvArg = pVars.has(recv) ? recv : `&${recv}`;
+            const recvArg = isEnumOwner ? recv : pVars.has(recv) ? recv : `&${recv}`;
             if (args) {
               return `${cname}(${recvArg}, ${args})`;
             }
@@ -623,19 +793,31 @@ export function translateExpr(
 
   // 12b. Wrap concrete struct arguments passed to `dyn Trait` parameters in 16-byte fat pointer `(JnDyn_Trait){ ... }`
   for (const fspec of Object.values(ast.functions)) {
-    if (!fspec.struct_owner && fspec.params.length === 1 && fspec.params[0].ty.startsWith("dyn ")) {
-      const tname = fspec.params[0].ty.slice(4).trim();
+    if (!fspec.struct_owner && fspec.params.some((p) => p.ty.startsWith("dyn "))) {
       const fname = fspec.name;
       s = s.replace(
-        new RegExp(`\\b${escapeRegExp(fname)}\\(([A-Za-z_][A-Za-z0-9_]*)\\)`, "g"),
-        (fullMatch, rawArg: string) => {
-          const arg = rawArg.trim();
-          const argTy = vTypes[arg];
-          if (argTy && argTy in ast.structs) {
-            const ptrExpr = pVars.has(arg) ? arg : `&${arg}`;
-            return `${fname}((JnDyn_${tname}){ .data = (void*)${ptrExpr}, .vtable = &JnVTable_${tname}_for_${argTy} })`;
+        new RegExp(`\\b${escapeRegExp(fname)}\\(((?:[^()]|\\([^()]*\\))*)\\)`, "g"),
+        (fullMatch, rawArgsStr: string) => {
+          const callArgs = splitTopLevelCommas(rawArgsStr);
+          if (callArgs.length !== fspec.params.length) {
+            return fullMatch;
           }
-          return fullMatch;
+          let changed = false;
+          const mappedArgs = callArgs.map((rawArg, pIdx) => {
+            const paramSpec = fspec.params[pIdx];
+            if (paramSpec.ty.startsWith("dyn ")) {
+              const tname = paramSpec.ty.slice(4).trim();
+              const arg = rawArg.trim();
+              const argTy = vTypes[arg];
+              if (argTy && argTy in ast.structs) {
+                changed = true;
+                const ptrExpr = pVars.has(arg) ? arg : `&${arg}`;
+                return `(JnDyn_${tname}){ .data = (void*)${ptrExpr}, .vtable = &JnVTable_${tname}_for_${argTy} }`;
+              }
+            }
+            return rawArg;
+          });
+          return changed ? `${fname}(${mappedArgs.join(", ")})` : fullMatch;
         },
       );
     }
@@ -648,8 +830,9 @@ export function translateExpr(
   s = s.replace(/->(next|prev|lhs|rhs)\./g, "->$1->");
 
   // 14. Replace string equality / inequality `a == jn_mk_str(...)` and `a != jn_mk_str(...)`
-  s = s.replace(/([A-Za-z0-9_.\->]+)\s*==\s*(jn_mk_str\([^)]*\))/g, "jn_str_eq($1, $2)");
-  s = s.replace(/([A-Za-z0-9_.\->]+)\s*!=\s*(jn_mk_str\([^)]*\))/g, "(!jn_str_eq($1, $2))");
+  s = s.replace(/\(\s*([A-Za-z0-9_.\->]+(?:\([^()]*\))?)\s*\)\s*==\s*\(\s*(jn_mk_str\([^)]*\))\s*\)/g, "jn_str_eq($1, $2)");
+  s = s.replace(/([A-Za-z0-9_.\->]+(?:\([^()]*\))?)\s*==\s*(jn_mk_str\([^)]*\))/g, "jn_str_eq($1, $2)");
+  s = s.replace(/([A-Za-z0-9_.\->]+(?:\([^()]*\))?)\s*!=\s*(jn_mk_str\([^)]*\))/g, "(!jn_str_eq($1, $2))");
 
   return s;
 }

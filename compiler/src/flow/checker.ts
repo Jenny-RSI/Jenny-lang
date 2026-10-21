@@ -390,6 +390,67 @@ export function validateStage2MemoryAndEffects(ast: ModuleAST, _rawJnText = ""):
         }
       }
     }
+
+    // 6. Check Wave 4 Concurrency Deadlock Prevention axioms (E0705, E0706, E0707)
+    const heldLocks = new Set<string>();
+    const heldTlsBorrows = new Set<string>();
+    for (const stmt of fn.body_lines) {
+      const s = stmt.trim();
+      if (!s) continue;
+      const mLockAcq = /\b([A-Za-z_][A-Za-z0-9_]*)\.(?:lock_checked|lock_acquire|read_lock|write_lock)\s*\(/.exec(s);
+      if (mLockAcq) {
+        const mtxVar = mLockAcq[1];
+        if (heldLocks.has(mtxVar)) {
+          diags.push({
+            code: "E0707_REENTRANT_LOCK_ACQUIRE",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: fn.name,
+            offending_token: s,
+            message: `Re-entrant lock acquisition detected on \`${mtxVar}\` in \`${k}\` without an intervening unlock! Jenny mutexes are strictly non-reentrant to guarantee deterministic lock hierarchy.`,
+            suggested_replacement: `// Unlock \`${mtxVar}\` before re-acquiring`,
+          });
+        }
+        heldLocks.add(mtxVar);
+      }
+      const mLockRel = /\b([A-Za-z_][A-Za-z0-9_]*)\.(?:unlock_checked|unlock_release|mark_consistent_and_unlock)\s*\(/.exec(s);
+      if (mLockRel) {
+        heldLocks.delete(mLockRel[1]);
+      }
+      const mTlsBorrow = /\b([A-Za-z_][A-Za-z0-9_]*)\.borrow_tls\s*\(/.exec(s);
+      if (mTlsBorrow) {
+        heldTlsBorrows.add(mTlsBorrow[1]);
+      }
+      if (/\b(?:await\b|\.await\b|await_result\s*\()/.test(s)) {
+        if (heldLocks.size > 0) {
+          const firstLock = [...heldLocks][0];
+          diags.push({
+            code: "E0705_LOCK_ACROSS_AWAIT",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: fn.name,
+            offending_token: s,
+            message: `Cannot hold synchronous lock \`${firstLock}\` across suspension point \`${s}\` in \`${k}\` (\`@non_suspendable\` violation)! Release \`${firstLock}\` before awaiting or use \`std::fiber::sync::AsyncMutex\`.`,
+            suggested_replacement: `${firstLock}.unlock_checked(...)`,
+          });
+        }
+        if (heldTlsBorrows.size > 0) {
+          const firstTls = [...heldTlsBorrows][0];
+          diags.push({
+            code: "E0706_TLS_BORROW_ACROSS_AWAIT",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: fn.name,
+            offending_token: s,
+            message: `Cannot hold \`ThreadLocal\` borrow \`${firstTls}\` across suspension point \`${s}\` in \`${k}\` because the fiber may resume on a different OS worker thread!`,
+            suggested_replacement: `// Copy value out of \`${firstTls}\` before suspension point`,
+          });
+        }
+      }
+    }
   }
 
   return diags;
@@ -474,6 +535,69 @@ export function validateStage3SpinAndTraits(ast: ModuleAST, rawJnText = ""): Dia
             offending_token: `...${p.name}`,
             message: `Variadic \`@spin\` function \`${fname}\` declares unconstrained pack \`...${p.name}\`! Jenny forbids duck-typed unconstrained templates; specify an explicit trait bound such as \`...${p.name}: Formattable\`.`,
             suggested_replacement: `...${p.name}: Formattable`,
+          });
+        }
+      }
+    }
+  }
+
+  // 5. Liskov Contract Subtyping verification on `impl Trait for Type` (`JENNY_FORMAL_SPEC_v2.0.md` §3.4 & §5.4)
+  for (const ti of ast.trait_impls ?? []) {
+    const tdecl = ast.traits[ti.trait_name];
+    if (!tdecl) continue;
+    for (const [tmName, tmSpec] of Object.entries(tdecl.methods)) {
+      const implKey = `${ti.struct_name}.${tmName}`;
+      const implFn = ast.functions[implKey];
+      if (!implFn) continue;
+
+      // 5a. Effect subtyping: Effects(impl) \ Mask(impl) <= Effects(Trait)
+      const allowedEffects = new Set(tmSpec.effects);
+      const maskedEffects = new Set(implFn.masked_effects);
+      for (const eff of implFn.effects) {
+        if (!maskedEffects.has(eff) && !allowedEffects.has(eff)) {
+          diags.push({
+            code: "E0506_SEMVER_EFFECT_EXPANSION",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: implKey,
+            offending_token: `effects [${eff}]`,
+            message: `Liskov Effect Subtyping Violation in \`impl ${ti.trait_name} for ${ti.struct_name}\`: method \`${implKey}\` exposes unmasked effect \`${eff}\` not declared on \`${ti.trait_name}.${tmName}\`! Use \`mask [${eff}]\` if internally contained.`,
+            suggested_replacement: `mask [${eff}]`,
+          });
+        }
+      }
+
+      // 5b. Contravariant preconditions: impl cannot add stronger `requires` than Trait
+      const traitReqConds = new Set(tmSpec.requires.map((r) => r.cond.replace(/\s+/g, "")));
+      for (const req of implFn.requires) {
+        if (!traitReqConds.has(req.cond.replace(/\s+/g, ""))) {
+          diags.push({
+            code: "E0507_SEMVER_STRENGTHENED_REQUIRES",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: implKey,
+            offending_token: `requires ${req.cond}`,
+            message: `Liskov Precondition Violation in \`impl ${ti.trait_name} for ${ti.struct_name}\`: method \`${implKey}\` strengthens precondition with \`requires ${req.cond}\` not present in \`${ti.trait_name}.${tmName}\`!`,
+            suggested_replacement: `// Remove strengthened requires ${req.cond}`,
+          });
+        }
+      }
+
+      // 5c. Covariant postconditions: impl must preserve all `ensures` declared on Trait
+      const implEnsConds = new Set(implFn.ensures.map((e) => e.replace(/\s+/g, "")));
+      for (const tEns of tmSpec.ensures) {
+        if (!implEnsConds.has(tEns.replace(/\s+/g, ""))) {
+          diags.push({
+            code: "E0508_SEMVER_WEAKENED_ENSURES",
+            severity: "error",
+            module: ast.name,
+            line: 1,
+            function: implKey,
+            offending_token: `ensures ${tEns}`,
+            message: `Liskov Postcondition Violation in \`impl ${ti.trait_name} for ${ti.struct_name}\`: method \`${implKey}\` weakens postcondition by omitting \`ensures ${tEns}\` required by \`${ti.trait_name}.${tmName}\`!`,
+            suggested_replacement: `ensures ${tEns}`,
           });
         }
       }

@@ -1,4 +1,5 @@
 import type { FnSpec, ModuleAST } from "./ast.ts";
+import { computeTypeIdHash64 } from "./ast.ts";
 import { cFnName, isClosureType, isStructPtrType, mapCType, parseStructFieldInits, resultTypedefName, translateExpr } from "./codegen_expr.ts";
 import { emitExampleRunnersAndFuzzSuite } from "./codegen_harness.ts";
 
@@ -22,19 +23,8 @@ export function transpileModuleToC99(ast: ModuleAST): string {
   }
   out.push("} JnErrTag;");
   for (const ename of Object.keys(ast.enums)) out.push(`typedef int64_t ${ename};`);
-  const emittedTuples = new Set<string>();
-  for (const fn of Object.values(ast.functions)) {
-    for (const p of fn.params) {
-      const pty = p.ty.trim();
-      if (pty.startsWith("(") && pty.endsWith(")")) {
-        const tCname = mapCType(pty);
-        if (!emittedTuples.has(tCname)) {
-          emittedTuples.add(tCname);
-          const tElems = pty.slice(1, -1).split(",").map((x) => x.trim()).filter((x) => x.length > 0);
-          out.push(`typedef struct { ${tElems.map((te, idx) => `${mapCType(te)} f${idx};`).join(" ")} } ${tCname};`);
-        }
-      }
-    }
+  for (const sname of Object.keys(ast.structs)) {
+    out.push(`#define JN_TYPE_ID_${sname} ${computeTypeIdHash64(ast.name, sname)}`);
   }
   out.push("");
 
@@ -56,8 +46,53 @@ export function transpileModuleToC99(ast: ModuleAST): string {
     out.push("}", "");
   }
 
+  const emittedTuples = new Set<string>();
+  const emittedArrs = new Set<string>();
+  const emittedOpts = new Set<string>(["JnOpt_i64", "JnOpt_i32", "JnOpt_str"]);
+  const emittedSlices = new Set<string>(["JnSlice_i64", "JnSlice_u8", "JnSlice_u64", "JnSlice_str"]);
+  const emitCompositeTypedefIfNeeded = (rawTy: string): void => {
+    const ty = rawTy.trim();
+    if (ty.startsWith("(") && ty.endsWith(")")) {
+      const tCname = mapCType(ty);
+      if (!emittedTuples.has(tCname)) {
+        emittedTuples.add(tCname);
+        const tElems = ty.slice(1, -1).split(",").map((x) => x.trim()).filter((x) => x.length > 0);
+        out.push(`typedef struct { ${tElems.map((te, idx) => `${mapCType(te)} f${idx};`).join(" ")} } ${tCname};`);
+      }
+    } else if (ty.endsWith("?") && !ty.startsWith("*") && !ty.startsWith("^")) {
+      const optCname = mapCType(ty);
+      if (!emittedOpts.has(optCname)) {
+        emittedOpts.add(optCname);
+        const baseTy = ty.slice(0, -1).trim();
+        out.push(`typedef struct { bool has_val; ${mapCType(baseTy)} val; } ${optCname};`);
+      }
+    } else if (ty.startsWith("[]")) {
+      const sCname = mapCType(ty);
+      if (!emittedSlices.has(sCname)) {
+        emittedSlices.add(sCname);
+        const elemTy = ty.slice(2).trim();
+        out.push(`typedef struct { ${mapCType(elemTy)}* ptr; int64_t len; } ${sCname};`);
+      }
+    } else {
+      const mArr = /^\[(\d+)\](.+)$/.exec(ty);
+      if (mArr) {
+        const aCname = mapCType(ty);
+        if (!emittedArrs.has(aCname)) {
+          emittedArrs.add(aCname);
+          out.push(`typedef struct { ${mapCType(mArr[2])} elems[${mArr[1]}]; } ${aCname};`);
+        }
+      }
+    }
+  };
+  for (const fn of Object.values(ast.functions)) {
+    for (const p of fn.params) emitCompositeTypedefIfNeeded(p.ty);
+    emitCompositeTypedefIfNeeded(fn.ret_ty);
+  }
+  if (emittedTuples.size > 0 || emittedArrs.size > 0 || emittedOpts.size > 3 || emittedSlices.size > 4) out.push("");
+
+
   for (const [tname, tdecl] of Object.entries(ast.traits)) {
-    out.push("typedef struct {");
+    out.push("typedef struct {", "    uint64_t type_id;");
     for (const [tmName, tmSpec] of Object.entries(tdecl.methods)) {
       const fpParams = ["void* self", ...tmSpec.params.filter((p) => p.name !== "self").map((p) => `${mapCType(p.ty)} ${p.name}`)];
       out.push(`    ${mapCType(tmSpec.ret_ty)} (*${tmName})(${fpParams.join(", ")});`);
@@ -76,9 +111,10 @@ export function transpileModuleToC99(ast: ModuleAST): string {
     if (fspec.is_spin_variadic) continue;
     const retC = fspec.err_ty ? resultTypedefName(fspec) : mapCType(fspec.ret_ty);
     const cParams = fspec.params.map((p) => {
-      if (p.name === "self") return p.mode === "mut" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`;
+      if (p.name === "self" && p.ty in ast.enums) return `${mapCType(p.ty)} self`;
+      if (p.name === "self") return p.mode === "mut" || p.mode === "own" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`;
       if (isStructPtrType(p.ty)) return `${mapCType(p.ty)} ${p.name}`;
-      if (p.mode === "mut" && (p.ty === "Arena" || p.ty in ast.structs)) return `${mapCType(p.ty)}* JN_RESTRICT ${p.name}`;
+      if (p.mode === "mut" && (p.ty === "Arena" || p.ty in ast.structs || /^\[\d+\]/.test(p.ty))) return `${mapCType(p.ty)}* JN_RESTRICT ${p.name}`;
       return `${mapCType(p.ty)} ${p.name}`;
     });
     out.push(`${retC} ${cFnName(fspec)}(${cParams.length > 0 ? cParams.join(", ") : "void"});`);
@@ -88,7 +124,7 @@ export function transpileModuleToC99(ast: ModuleAST): string {
   for (const [tname, tdecl] of Object.entries(ast.traits)) {
     for (const sname of Object.keys(ast.structs)) {
       if (Object.keys(tdecl.methods).every((tmName) => `${sname}.${tmName}` in ast.functions)) {
-        out.push(`static const JnVTable_${tname} JnVTable_${tname}_for_${sname} = {`);
+        out.push(`static const JnVTable_${tname} JnVTable_${tname}_for_${sname} = {`, `    .type_id = JN_TYPE_ID_${sname},`);
         for (const tmName of Object.keys(tdecl.methods)) out.push(`    .${tmName} = (void*)${sname}_${tmName},`);
         out.push("};", "");
       }
@@ -101,22 +137,38 @@ export function transpileModuleToC99(ast: ModuleAST): string {
 
   function synthesizeClosureLiteral(
     closureExpr: string,
-    fspec: FnSpec,
+    fspec: FnSpec | null,
     ptrVars: Set<string>,
     varTypes: Record<string, string>,
     ownBoxParams: string[],
     localOwnedBoxes: string[],
   ): [string[], string, string] | null {
-    const mCl = /^(\*|\^)?fn(?:\[([^\]]*)\])?\(\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*\)(?:\s*->\s*[A-Za-z0-9_]+)?\s*=>\s*(.+)$/.exec(closureExpr.trim());
+    const mCl2 = /^fn\(\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*,\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*\)(?:\s*->\s*[A-Za-z0-9_]+)?\s*=>\s*(.+)$/.exec(closureExpr.trim());
+    if (mCl2) {
+      const [pA, pB, cBodyRaw] = [mCl2[1], mCl2[2], mCl2[3].trim()];
+      const cid = closureSeq++;
+      liftedClosuresDefs.push(`typedef struct _JnClosureEnv_${cid} { int64_t _unused; } _JnClosureEnv_${cid};`);
+      const cBodyTrans = translateExpr(cBodyRaw, ast, fspec, null, ptrVars, varTypes);
+      liftedClosuresDefs.push(
+        `static int64_t _jn_closure_call_${cid}(const void* _raw_env, int64_t ${pA}, int64_t ${pB}) { (void)_raw_env; return ${cBodyTrans}; }`,
+        "",
+      );
+      return [
+        [`    _JnClosureEnv_${cid} _cenv_${cid} = (_JnClosureEnv_${cid}){ ._unused = 0 };`],
+        `((JnFn_i64_i64_to_i64){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} })`,
+        "fn(i64, i64) -> i64",
+      ];
+    }
+    const mCl = /^(\*|\^)?fn(?:\[([^\]]*)\])?\(\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_]+)?\s*\)(?:\s*->\s*([A-Za-z0-9_]+))?\s*=>\s*(.+)$/.exec(closureExpr.trim());
     if (!mCl) return null;
-    const [track, capListRaw, cParam, cBodyRaw] = [mCl[1] || "", mCl[2] || "", mCl[3], mCl[4].trim()];
+    const [track, capListRaw, cParam, retTyRaw, cBodyRaw] = [mCl[1] || "", mCl[2] || "", mCl[3], (mCl[4] || "i64").trim(), mCl[5].trim()];
     const ownCaps = [...capListRaw.matchAll(/\bown\s+([A-Za-z_][A-Za-z0-9_]*)\b/g)].map((m) => m[1]);
     for (const oc of ownCaps) {
       removeFromList(ownBoxParams, oc);
       removeFromList(localOwnedBoxes, oc);
     }
     const paramTyMap: Record<string, string> = {};
-    for (const p of fspec.params) paramTyMap[p.name] = p.ty;
+    if (fspec) for (const p of fspec.params) paramTyMap[p.name] = p.ty;
     const capturedVars: [string, string][] = [];
     for (const [vname, vty] of Object.entries(varTypes)) {
       if (vname !== cParam && (new RegExp(`\\b${vname}\\b`).test(cBodyRaw) || ownCaps.includes(vname))) {
@@ -133,8 +185,9 @@ export function transpileModuleToC99(ast: ModuleAST): string {
     let cBodyTrans = translateExpr(cBodyRaw, ast, fspec, null, ptrVars, varTypes);
     for (const [cvName] of capturedVars) cBodyTrans = cBodyTrans.replace(new RegExp(`\\b${cvName}\\b`, "g"), `_env->${cvName}`);
 
+    const cRetTy = retTyRaw === "bool" ? "bool" : "int64_t";
     liftedClosuresDefs.push(
-      `static int64_t _jn_closure_call_${cid}(const void* _raw_env, int64_t ${cParam}) {`,
+      `static ${cRetTy} _jn_closure_call_${cid}(const void* _raw_env, int64_t ${cParam}) {`,
       `    const _JnClosureEnv_${cid}* _env = (const _JnClosureEnv_${cid}*)_raw_env; (void)_env; return ${cBodyTrans};`,
       "}",
     );
@@ -162,10 +215,12 @@ export function transpileModuleToC99(ast: ModuleAST): string {
         "^fn(i64) -> i64",
       ];
     }
+    const fnStruct = retTyRaw === "bool" ? "JnFn_i64_to_bool" : "JnFn_i64_to_i64";
+    const fnJnTy = retTyRaw === "bool" ? "fn(i64) -> bool" : "fn(i64) -> i64";
     return [
       [`    _JnClosureEnv_${cid} _cenv_${cid} = (_JnClosureEnv_${cid}){ ${envInits} };`],
-      `((JnFn_i64_to_i64){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} })`,
-      "fn(i64) -> i64",
+      `((${fnStruct}){ .env = &_cenv_${cid}, .call = _jn_closure_call_${cid} })`,
+      fnJnTy,
     ];
   }
 
@@ -181,10 +236,11 @@ export function transpileModuleToC99(ast: ModuleAST): string {
 
     for (const p of fspec.params) {
       varTypes[p.name] = p.ty.startsWith("dyn ") || isClosureType(p.ty) ? p.ty : stripPtrAndOpt(p.ty);
-      if (p.name === "self") {
+      if (p.name === "self" && p.ty in ast.enums) {
+        cParams.push(`${mapCType(p.ty)} self`);
+      } else if (p.name === "self") {
         ptrVars.add("self");
-        cParams.push(p.mode === "mut" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`);
-        if (p.mode === "own") ownBoxParams.push("self");
+        cParams.push(p.mode === "mut" || p.mode === "own" ? `${p.ty}* JN_RESTRICT self` : `const ${p.ty}* self`);
       } else if (isStructPtrType(p.ty)) {
         ptrVars.add(p.name);
         cParams.push(`${mapCType(p.ty)} ${p.name}`);
@@ -192,7 +248,7 @@ export function transpileModuleToC99(ast: ModuleAST): string {
       } else if (isClosureType(p.ty)) {
         cParams.push(`${mapCType(p.ty)} ${p.name}`);
         if (p.mode === "own" && p.ty.startsWith("*fn(")) ownBoxFnParams.push(p.name);
-      } else if (p.mode === "mut" && (p.ty === "Arena" || p.ty in ast.structs)) {
+      } else if (p.mode === "mut" && (p.ty === "Arena" || p.ty in ast.structs || /^\[\d+\]/.test(p.ty))) {
         ptrVars.add(p.name);
         cParams.push(`${mapCType(p.ty)}* JN_RESTRICT ${p.name}`);
       } else {
@@ -204,7 +260,11 @@ export function transpileModuleToC99(ast: ModuleAST): string {
     for (const p of fspec.params) {
       const baseS = stripPtrAndOpt(p.ty);
       if (baseS in ast.structs) {
-        out.push(ptrVars.has(p.name) ? `    if (${p.name}) ${baseS}_check_invariant(${p.name}, "${key}:entry");` : `    ${baseS}_check_invariant(&${p.name}, "${key}:entry");`);
+        if (p.ty.endsWith("?") && !p.ty.startsWith("*") && !p.ty.startsWith("^")) {
+          out.push(`    if (${p.name}.has_val) ${baseS}_check_invariant(&${p.name}.val, "${key}:entry");`);
+        } else {
+          out.push(ptrVars.has(p.name) ? `    if (${p.name}) ${baseS}_check_invariant(${p.name}, "${key}:entry");` : `    ${baseS}_check_invariant(&${p.name}, "${key}:entry");`);
+        }
       }
     }
 
@@ -232,16 +292,21 @@ export function transpileModuleToC99(ast: ModuleAST): string {
     }
 
     const localOwnedBoxes: string[] = [];
+    const isOwnSelf = fspec.params.some((p) => p.name === "self" && p.mode === "own");
     const emitExitChecks = (resultVar: string | null): string[] => {
       const checks: string[] = [];
       for (const obp of ownBoxParams) if (!fspec.body_lines.some((bl) => bl.includes(`jn_box_free(${obp})`))) checks.push(`    jn_box_free(${obp});`);
       for (const obf of ownBoxFnParams) checks.push(`    jn_box_fn_drop(&${obf});`);
       for (const lbox of localOwnedBoxes) if (lbox !== resultVar && !fspec.body_lines.some((bl) => bl.includes(`jn_box_free(${lbox})`))) checks.push(`    jn_box_free(${lbox});`);
-      if (ptrVars.has("self") && fspec.struct_owner && fspec.struct_owner in ast.structs && !ownBoxParams.includes("self")) checks.push(`    ${fspec.struct_owner}_check_invariant(self, "${key}:exit");`);
+      if (ptrVars.has("self") && fspec.struct_owner && fspec.struct_owner in ast.structs && !isOwnSelf) checks.push(`    ${fspec.struct_owner}_check_invariant(self, "${key}:exit");`);
       const retBase = stripPtrAndOpt(fspec.ret_ty);
-      if (resultVar) varTypes[resultVar] = retBase;
+      if (resultVar) varTypes[resultVar] = fspec.ret_ty.endsWith("?") ? fspec.ret_ty : retBase;
       if (resultVar && retBase in ast.structs) {
-        checks.push(fspec.ret_ty.startsWith("*") || fspec.ret_ty.startsWith("^") ? `    ${retBase}_check_invariant(${resultVar}, "${key}:return");` : `    ${retBase}_check_invariant(&${resultVar}, "${key}:return");`);
+        if (fspec.ret_ty.endsWith("?")) {
+          checks.push(`    if (${resultVar}.has_val) ${retBase}_check_invariant(&${resultVar}.val, "${key}:return");`);
+        } else {
+          checks.push(fspec.ret_ty.startsWith("*") || fspec.ret_ty.startsWith("^") ? `    ${retBase}_check_invariant(${resultVar}, "${key}:return");` : `    ${retBase}_check_invariant(&${resultVar}, "${key}:return");`);
+        }
       }
       for (const ens of fspec.ensures) checks.push(`    if (!(${translateExpr(ens, ast, fspec, oldMap, ptrVars, varTypes)})) jn_contract_fail("ensures", "${key}", "${ens.replaceAll('"', '\\"')}");`);
       return checks;
@@ -347,6 +412,18 @@ export function transpileModuleToC99(ast: ModuleAST): string {
         const [primSpec, fbSpec] = [ast.functions[primExpr.split("(")[0].trim()], ast.functions[fbExpr.split("(")[0].trim()]];
         const [cPrim, cFb] = [translateExpr(primExpr, ast, fspec, null, ptrVars, varTypes), translateExpr(fbExpr, ast, fspec, null, ptrVars, varTypes)];
         out.push(`    ${mapCType(primSpec.ret_ty)} ${vname};`, `    ${resultTypedefName(primSpec)} _prim_${vname} = ${cPrim};`, `    if (!_prim_${vname}.is_err) { ${vname} = _prim_${vname}.val; } else {`, `        ${resultTypedefName(fbSpec)} _fb_${vname} = ${cFb};`, `        if (_fb_${vname}.is_err) {`, ...localOwnedBoxes.map((lbox) => `            jn_box_free(${lbox});`), `            JnAnyError _pe = jn_err_propagate(_fb_${vname}.err, "${ast.name}", "${key}", ${bIdx + 1});`, `            return (${retC}){ .is_err = true, .err = _pe };`, "        }", `        ${vname} = _fb_${vname}.val;`, "    }");
+        continue;
+      }
+
+      const mDowncast = /^(\}\s*else\s+if|else\s+if|if)\s+([A-Za-z_][A-Za-z0-9_]*)\s+is\s+([A-Za-z_][A-Za-z0-9_]*)\(([A-Za-z_][A-Za-z0-9_]*)\)\s*\{$/.exec(stmt);
+      if (mDowncast && mDowncast[3] in ast.structs) {
+        const [kw, dynVar, targetStruct, bindVar] = [mDowncast[1].trim(), mDowncast[2], mDowncast[3], mDowncast[4]];
+        ptrVars.add(bindVar);
+        varTypes[bindVar] = targetStruct;
+        out.push(
+          `    ${kw} ((${dynVar}.vtable != NULL) && (${dynVar}.vtable->type_id == JN_TYPE_ID_${targetStruct})) {`,
+          `        const ${targetStruct}* ${bindVar} = (const ${targetStruct}*)${dynVar}.data;`,
+        );
         continue;
       }
 
@@ -512,14 +589,32 @@ export function transpileModuleToC99(ast: ModuleAST): string {
           out.push(...closSynth[0], `    ${mapCType(closSynth[2])} ${vname} = ${closSynth[1]};`);
           continue;
         }
-        const cRhs = translateExpr(rhs, ast, fspec, null, ptrVars, varTypes);
+        let cRhs = translateExpr(rhs, ast, fspec, null, ptrVars, varTypes);
         const fnPrefix = cRhs.split("(")[0].trim();
         const matchedSpec = Object.values(ast.functions).find((fs) => cFnName(fs) === fnPrefix) ?? null;
         let cTy = "int64_t";
         if (explTy) {
           cTy = mapCType(explTy);
-          varTypes[vname] = isClosureType(explTy) ? explTy : stripPtrAndOpt(explTy);
+          varTypes[vname] = explTy.startsWith("dyn ") || explTy.startsWith("[]") || isClosureType(explTy) ? explTy : stripPtrAndOpt(explTy);
           if (isStructPtrType(explTy)) ptrVars.add(vname);
+          if (/^\[\d+\]/.test(explTy) && rhs.startsWith("[") && rhs.endsWith("]")) {
+            cRhs = `((${cTy}){ .elems = { ${rhs.slice(1, -1)} } })`;
+          } else if (explTy.startsWith("[]") && rhs.startsWith("[") && rhs.endsWith("]")) {
+            const inner = rhs.slice(1, -1).trim();
+            const elemC = mapCType(explTy.slice(2).trim());
+            const sliceC = mapCType(explTy);
+            if (!inner) {
+              cRhs = `((${sliceC}){ .ptr = NULL, .len = 0 })`;
+            } else {
+              const elems = inner.split(",").map((e) => translateExpr(e.trim(), ast, fspec, null, ptrVars, varTypes));
+              cRhs = `((${sliceC}){ .ptr = (${elemC}[]){ ${elems.join(", ")} }, .len = ${elems.length} })`;
+            }
+          } else if (explTy.startsWith("dyn ") && rhs in varTypes && varTypes[rhs] in ast.structs) {
+            const tname = explTy.slice(4).trim();
+            const argTy = varTypes[rhs];
+            const ptrExpr = ptrVars.has(rhs) ? rhs : `&${rhs}`;
+            cRhs = `((JnDyn_${tname}){ .data = (void*)${ptrExpr}, .vtable = &JnVTable_${tname}_for_${argTy} })`;
+          }
         } else if (rhs.startsWith("Arena.new")) {
           cTy = "JnArena";
           varTypes[vname] = "Arena";
@@ -553,7 +648,7 @@ export function transpileModuleToC99(ast: ModuleAST): string {
 
       if (stmt.startsWith("requires ") || stmt.startsWith("ensures ")) continue;
 
-      if ((bIdx === blines.length - 1 || blines[bIdx + 1].startsWith("}")) && fspec.ret_ty !== "void" && !stmt.replaceAll("==", "").replaceAll("!=", "").replaceAll("<=", "").replaceAll(">=", "").includes("=")) {
+      if ((bIdx === blines.length - 1 || blines[bIdx + 1].startsWith("}")) && fspec.ret_ty !== "void" && fspec.ret_ty !== "never" && !stmt.replaceAll("==", "").replaceAll("!=", "").replaceAll("<=", "").replaceAll(">=", "").includes("=")) {
         const cRet = translateExpr(stmt, ast, fspec, null, ptrVars, varTypes);
         out.push(`    { ${mapCType(fspec.ret_ty)} result = ${cRet};`, ...emitExitChecks("result"), fspec.err_ty ? `    return (${retC}){ .is_err = false, .val = result }; }` : "    return result; }");
         continue;
@@ -562,7 +657,7 @@ export function transpileModuleToC99(ast: ModuleAST): string {
       out.push(`    ${translateExpr(stmt, ast, fspec, null, ptrVars, varTypes)};`);
     }
 
-    if (fspec.ret_ty === "void") {
+    if (fspec.ret_ty === "void" || fspec.ret_ty === "never") {
       out.push(...emitExitChecks(null), fspec.err_ty ? `    return (${retC}){ .is_err = false, .val = 0 };` : "    return 0;");
     }
     out.push("}", "");

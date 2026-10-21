@@ -67,6 +67,11 @@ export interface TraitDecl {
   methods: Record<string, FnSpec>;
 }
 
+export interface TraitImplDecl {
+  trait_name: string;
+  struct_name: string;
+}
+
 export interface ExampleBlock {
   title: string;
   body_lines: string[];
@@ -88,6 +93,7 @@ export interface ModuleAST {
   name: string;
   enums: Record<string, EnumDecl>;
   traits: Record<string, TraitDecl>;
+  trait_impls: TraitImplDecl[];
   structs: Record<string, StructDecl>;
   functions: Record<string, FnSpec>;
   examples: ExampleBlock[];
@@ -96,6 +102,18 @@ export interface ModuleAST {
   tolerant_semicolons: number;
   spun_path: string | null;
   spin_bound_diagnostics: Diagnostic[];
+}
+
+export function computeTypeIdHash64(moduleName: string, structName: string): string {
+  const fqName = `${moduleName}::${structName}`;
+  let h = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask64 = 0xffffffffffffffffn;
+  for (let i = 0; i < fqName.length; i++) {
+    h ^= BigInt(fqName.charCodeAt(i) & 0xff);
+    h = (h * prime) & mask64;
+  }
+  return `0x${h.toString(16).toUpperCase().padStart(16, "0")}ULL`;
 }
 
 export function createFieldDecl(
@@ -152,6 +170,7 @@ export function createModuleAST(name = "unnamed"): ModuleAST {
     name,
     enums: {},
     traits: {},
+    trait_impls: [],
     structs: {},
     functions: {},
     examples: [],
@@ -188,9 +207,13 @@ export function stripCommentsAndSemi(line: string, ast?: ModuleAST | null): stri
     !sTrim.startsWith("@spin") &&
     !sTrim.startsWith("@apply") &&
     !sTrim.startsWith("import ") &&
-    !sTrim.startsWith("export ")
+    !sTrim.startsWith("export ") &&
+    !sTrim.startsWith("pub import ")
   ) {
-    cleaned = cleaned.replace(/\b([A-Za-z_][A-Za-z0-9_]*)::([A-Za-z_][A-Za-z0-9_]*)\b/g, "$1.$2");
+    cleaned = cleaned.replace(
+      /"(?:\\.|[^"\\])*"|\b([A-Za-z_][A-Za-z0-9_]*)::([A-Za-z_][A-Za-z0-9_]*)\b/g,
+      (m, g1: string | undefined, g2: string | undefined) => (g1 && g2 ? `${g1}.${g2}` : m),
+    );
   }
   return cleaned;
 }
@@ -223,7 +246,7 @@ export function splitFnHeader(fullSig: string): [string, string, string | null] 
   if (s.endsWith("{")) {
     s = s.slice(0, -1).trimEnd();
   }
-  const mHead = /^(?:@spin\s+)?(?:(?:pub|pkg)\s+)?fn\s+([A-Za-z0-9_]+)\s*\(/.exec(s);
+  const mHead = /^(?:@spin\s+)?(?:(?:pub|pkg|iter)\s+)*fn\s+([A-Za-z0-9_]+)(?:<[^>]*>)?\s*\(/.exec(s);
   if (!mHead) {
     return null;
   }
@@ -250,7 +273,7 @@ export function splitFnHeader(fullSig: string): [string, string, string | null] 
   if (rest.startsWith("->")) {
     return [fnName, paramStr, rest.slice(2).trim()];
   }
-  return [fnName, paramStr, null];
+  return [fnName, paramStr, "void"];
 }
 
 export function parseParamList(paramStr: string, structOwner: string | null): ParamDecl[] {
@@ -281,21 +304,36 @@ export function parseParamList(paramStr: string, structOwner: string | null): Pa
       if (!m) {
         throw new Error(`Invalid parameter syntax: ${p}`);
       }
-      const mode = m[1] ?? "borrow";
-      params.push({ mode, name: m[2], ty: m[3].trim() });
+      let mode = m[1] ?? "borrow";
+      let ty = m[3].trim();
+      if (ty.startsWith("mut ")) {
+        mode = "mut";
+        ty = ty.slice(4).trim();
+      } else if (ty.startsWith("own ")) {
+        mode = "own";
+        ty = ty.slice(4).trim();
+      }
+      if (ty === "Self" && structOwner) {
+        ty = structOwner;
+      }
+      params.push({ mode, name: m[2], ty });
     }
   }
   return params;
 }
 
 export function parseReturnSpec(retStr: string): [string, string | null] {
+  const stripGen = (t: string): string =>
+    t.startsWith("fn(") || t.startsWith("*fn(") || t.startsWith("^fn(")
+      ? t
+      : t.replace(/<[^>]*>/g, "").trim();
   const s = retStr.trim();
   if (s.endsWith("!") && !s.slice(0, -1).includes("!")) {
-    return [s.slice(0, -1).trim(), "AnyError"];
+    return [stripGen(s.slice(0, -1).trim()), "AnyError"];
   }
   if (s.includes("!")) {
     const idx = s.indexOf("!");
-    return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()];
+    return [stripGen(s.slice(0, idx).trim()), stripGen(s.slice(idx + 1).trim())];
   }
-  return [s, null];
+  return [stripGen(s), null];
 }

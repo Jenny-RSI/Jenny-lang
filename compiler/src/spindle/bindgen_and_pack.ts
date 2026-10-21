@@ -187,6 +187,7 @@ export function extractCanonicalModuleAst(
   const jnText: string = meta.jn_text ?? fs.readFileSync(jnPath, "utf-8");
 
   const ast = parseJniBlueprint(jniText);
+  const jniKeys = new Set(Object.keys(ast.functions));
   attachJnImplementations(ast, jnText);
 
   const imports: string[] = [];
@@ -213,6 +214,7 @@ export function extractCanonicalModuleAst(
       name: fn.name,
       struct_owner: fn.struct_owner,
       is_spin_variadic: fn.is_spin_variadic,
+      is_private: !jniKeys.has(key),
       params: fn.params.map((p) => ({
         name: p.name,
         ty: p.ty,
@@ -302,7 +304,11 @@ export function decompileAstNodeToJn(modNode: Record<string, any>): string {
   const topFns = fns.filter((f) => !f.struct_owner);
   for (const tf of topFns) {
     out.push("");
-    const prefix = tf.is_spin_variadic ? "@spin pub fn" : "pub fn";
+    const prefix = tf.is_private
+      ? "fn"
+      : tf.is_spin_variadic
+        ? "@spin pub fn"
+        : "pub fn";
     const pS = (tf.params ?? []).map(fmtParam).join(", ");
     out.push(`${prefix} ${tf.name}(${pS}) -> ${fmtRet(tf)} {`);
     out.push(...emitBody(tf.body_stmts ?? [], 1));
@@ -326,7 +332,11 @@ export function decompileAstNodeToJn(modNode: Record<string, any>): string {
       if (idxM > 0) {
         out.push("");
       }
-      const prefix = mf.is_spin_variadic ? "@spin pub fn" : "pub fn";
+      const prefix = mf.is_private
+        ? "fn"
+        : mf.is_spin_variadic
+          ? "@spin pub fn"
+          : "pub fn";
       const pS = (mf.params ?? []).map(fmtParam).join(", ");
       out.push(`    ${prefix} ${mf.name}(${pS}) -> ${fmtRet(mf)} {`);
       out.push(...emitBody(mf.body_stmts ?? [], 2));
@@ -510,17 +520,40 @@ export function cmdStdCheck(
   const manifest = parseTapestryToml(pkgDir);
   const modMap: Record<string, Record<string, string>> = manifest.modules ?? {};
 
-  let domainsOrder = [
+  const knownDomainOrder = [
+    "prim",
     "core",
     "rt",
     "ffi",
+    "spin",
     "mem",
+    "math",
+    "slice",
+    "hash",
     "collections",
     "str",
+    "rand",
     "io",
     "codec",
+    "time",
+    "fs",
+    "env",
+    "process",
+    "net",
     "thread",
     "fiber",
+  ];
+  const discoveredDomains = fs
+    .readdirSync(pkgDir, { withFileTypes: true })
+    .filter(
+      (e) =>
+        e.isDirectory() &&
+        fs.existsSync(path.join(pkgDir, e.name, "CHECKLIST.md")),
+    )
+    .map((e) => e.name);
+  let domainsOrder = [
+    ...knownDomainOrder.filter((d) => discoveredDomains.includes(d)),
+    ...discoveredDomains.filter((d) => !knownDomainOrder.includes(d)).sort(),
   ];
   if (targetDomain) {
     domainsOrder = domainsOrder.filter((d) => d === targetDomain);
@@ -670,11 +703,23 @@ export function cmdStdCheck(
       }
       const items = modStagesPlan[sNum] ?? [];
       const pCnt = items.length;
-      const jniCnt = items.filter((it) => it.fn_key in liveJniFns).length;
-      const jnCnt = items.filter((it) => it.fn_key in liveJnFns).length;
+      const hasFnKey = (fnKey: string, map: Record<string, FnSpec>): boolean => {
+        if (fnKey in map) return true;
+        const norm = fnKey
+          .replace(/^(?:pub\s+)?iter\s+fn\s+/, "")
+          .replace(/<[^>]*>$/, "")
+          .trim();
+        if (norm in map) return true;
+        for (const k of Object.keys(map)) {
+          if (k.endsWith(`.${norm}`)) return true;
+        }
+        return false;
+      };
+      const jniCnt = items.filter((it) => hasFnKey(it.fn_key, liveJniFns)).length;
+      const jnCnt = items.filter((it) => hasFnKey(it.fn_key, liveJnFns)).length;
       const chkCnt = items.filter((it) => it.checked_in_md).length;
       const missingSigs = items
-        .filter((it) => !(it.fn_key in liveJnFns))
+        .filter((it) => !hasFnKey(it.fn_key, liveJnFns))
         .map((it) => it.signature);
 
       stageTotals[sNum].planned += pCnt;

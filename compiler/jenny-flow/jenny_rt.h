@@ -114,6 +114,36 @@ static inline bool jn_str_eq(jn_str a, jn_str b) {
     return a.len == b.len && (a.len == 0 || memcmp(a.ptr, b.ptr, a.len) == 0);
 }
 
+typedef struct JnSlice_i64 {
+    int64_t* ptr;
+    int64_t  len;
+} JnSlice_i64;
+
+typedef struct JnSlice_u8 {
+    uint8_t* ptr;
+    int64_t  len;
+} JnSlice_u8;
+
+typedef struct JnSlice_u64 {
+    uint64_t* ptr;
+    int64_t   len;
+} JnSlice_u64;
+
+typedef struct JnSlice_str {
+    jn_str* ptr;
+    int64_t len;
+} JnSlice_str;
+
+static inline JnSlice_i64 jn_slice_i64_sub(JnSlice_i64 xs, int64_t start, int64_t end) {
+    JnSlice_i64 r = { xs.ptr ? (xs.ptr + start) : NULL, end - start };
+    return r;
+}
+
+static inline JnSlice_u8 jn_slice_u8_sub(JnSlice_u8 xs, int64_t start, int64_t end) {
+    JnSlice_u8 r = { xs.ptr ? (xs.ptr + start) : NULL, end - start };
+    return r;
+}
+
 typedef struct JnOpt_i64 { bool has_val; int64_t val; } JnOpt_i64;
 typedef struct JnOpt_i32 { bool has_val; int32_t val; } JnOpt_i32;
 typedef struct JnOpt_str { bool has_val; jn_str  val; } JnOpt_str;
@@ -878,6 +908,21 @@ typedef struct JnFn_i64_to_i64 {
     int64_t (*call)(const void* env, int64_t arg);
 } JnFn_i64_to_i64;
 
+typedef struct JnFn_i64_i64_to_i64 {
+    const void* env;
+    int64_t (*call)(const void* env, int64_t a, int64_t b);
+} JnFn_i64_i64_to_i64;
+
+typedef struct JnFn_i64_to_bool {
+    const void* env;
+    bool (*call)(const void* env, int64_t arg);
+} JnFn_i64_to_bool;
+
+typedef struct JnFn_void_to_i64 {
+    const void* env;
+    int64_t (*call)(const void* env);
+} JnFn_void_to_i64;
+
 typedef struct JnBoxFn_i64_to_i64 {
     void* env;
     int64_t (*call)(const void* env, int64_t arg);
@@ -900,6 +945,14 @@ static inline void jn_box_fn_drop(JnBoxFn_i64_to_i64* f) {
         f->env = NULL;
     }
 }
+
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#define abs jn_usr_abs
 
 #endif /* JENNY_RT_H */
 

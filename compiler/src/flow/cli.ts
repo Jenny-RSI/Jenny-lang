@@ -56,6 +56,8 @@ export function runFlowCli(argv: string[] = process.argv.slice(2)): number {
       distill = argv[++i];
     } else if (arg.startsWith("--distill=")) {
       distill = arg.slice("--distill=".length);
+    } else if (!arg.startsWith("-") && (arg.endsWith(".jni") || arg.endsWith(".jn"))) {
+      runFile = arg;
     }
   }
 
