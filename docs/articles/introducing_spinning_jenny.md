@@ -1,4 +1,4 @@
-# Escaping the "Dark Forest" of Vibe Coding: Why We Designed the AI-Native Systems Programming Language Spinning Jenny from First Principles
+# Escaping the "Dark Forest" of Vibe Coding: How We Designed the AI-Native Systems Programming Language Spinning Jenny from First Principles
 
 > 🌐 **Language**: **English** | **[简体中文](../zh/articles/introducing_spinning_jenny_zh.md)**
 

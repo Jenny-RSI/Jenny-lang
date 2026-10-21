@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 🌐 **Language**: **English** | **[简体中文 (`README_zh.md`)](./README_zh.md)** · 📄 **[Technical Paper (EN)](./docs/paper/spinning_jenny_paper_en.md)** | **[技术论文 (中文)](./docs/paper/spinning_jenny_paper_zh.md)**
-
+** [Introduction: ](./docs/articles/introducing_spinning_jenny_zh.md) **
 ---
 
 ## 🌟 Why Spinning Jenny?
@@ -97,38 +97,6 @@ node compiler/src/jenny.ts semver-check
 
 # 4. Measure token economy metrics (TCR / TCR_impl / ECC) across B01-B25
 python benchmarks/eval/measure_tokens.py
-```
-
----
-
-## 📂 Repository Structure
-
-```text
-jenny/
-├── README.md                  # English project overview & quickstart
-├── README_zh.md               # Chinese project overview (中文总览)
-├── ROADMAP.md                 # Master Version Roadmap (v0.1 -> v1.0, English)
-├── ROADMAP_zh.md              # Master Version Roadmap (中文路线图)
-├── AGENTS.md                  # AI Agent Collaborative Engineering Charter
-├── MEMORY.md                  # Persistent Architectural Decisions & Empirical Memory
-├── compiler/                  # Modular TypeScript compiler & Spindle toolchain
-│   ├── src/
-│   │   ├── jenny.ts           # Unified CLI entry point (`node compiler/src/jenny.ts`)
-│   │   ├── flow/              # 13 modular TypeScript compiler stages (AST, blueprint, spin, QF_LIA prover, C99 codegen)
-│   │   └── spindle/           # 5 modular TypeScript package manager stages (audit, semver-check, bindgen-c, pack/decompile)
-│   ├── jenny-flow/            # C99 runtime header (`jenny_rt.h`) & historical Python compiler reference
-│   └── jenny-nano/            # Stage 0 contract weaver prototype
-├── library/                   # Official Jenny Standard Library & Declarative Patterns
-│   ├── std/                   # 15 implemented `std` modules (`rt`, `ffi`, `mem`, `collections`, `str`, `io`, `codec`) + `CHECKLIST.md`
-│   └── patterns/              # White-box `@spin` / `@apply` pattern packages (`fsm`, `codec`, `crud`)
-├── benchmarks/                # Jenny-Bench-25 suite (B01-B25: .jni + .jn + .rs) & evaluation tools
-├── tools/vscode-jenny/        # VS Code / Antigravity extension & LSP server (jenny-lsp)
-└── docs/
-    ├── paper/                 # Academic technical papers & peer reviews (English & Chinese)
-    ├── roadmap/               # Versioned roadmaps (roadmap_v0.1.md, roadmap_v0.2.md)
-    ├── design/                # English language design philosophy & v2.0 specifications (00-12)
-    ├── reports/               # Empirical retrospective & cross-language comparison reports
-    └── zh/                    # Complete preserved Chinese documentation, specs (00-13), plans, logs & reports
 ```
 
 ---
